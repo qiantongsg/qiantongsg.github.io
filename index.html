@@ -408,7 +408,7 @@ select, input {
 
 <script>
 // 替换为你的GAS部署URL
-const GOOGLE_API_URL = "https://script.google.com/macros/s/AKfycbxEtqStHljIISnkl6-L3BJXPy4VsO9gsVUI-X9MQz9jXDOpZA63lpUw3lTy4rKEjr4ISQ/exec";
+const GOOGLE_API_URL = "https://script.google.com/macros/s/AKfycbz2eTsH2dNrfq9PbtorN3iNB0o4pkB_xwvMLCaxjwtqSAWyXVLCZkOmuqZPpam2SAmoiw/exec";
 let piles = [];
 const steps = 12;
 const stageNames = [
@@ -593,7 +593,7 @@ async function loadTableData() {
     if (result.success) {
       piles = result.data.filter(p => p.pileNo).map(p => ({
         ...p,
-        stage: Number(p.stage) || 0,
+        stage: Math.max(0, Number(p.stage) - 1),
         lowerProgress: p.lowerProgress || '-'
       }));
       render();
