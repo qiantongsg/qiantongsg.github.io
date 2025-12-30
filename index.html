@@ -2,9 +2,8 @@
 <html lang="zh">
 <head>
 <meta charset="UTF-8">
-<title>打桩施工进度（Google DB版） / Boring Pile Progress (Google DB)</title>
+<title>打桩施工进度（SheetDB稳定版） / Boring Pile Progress (SheetDB Stable)</title>
 <style>
-/* 完整样式（无省略） */
 body {
   font-family: Arial, sans-serif;
   background: #f5f7fa;
@@ -221,7 +220,6 @@ select, input {
   box-sizing: border-box;
   min-width: 150px;
 }
-/* 加载动画 */
 .loading {
   display: inline-block;
   width: 20px;
@@ -238,10 +236,8 @@ select, input {
 </style>
 </head>
 <body>
-<!-- 完整HTML结构（无省略） -->
-<h2>打桩施工进度（Google DB版） / Boring Pile Progress (Google DB)</h2>
+<h2>打桩施工进度（SheetDB稳定版） / Boring Pile Progress (SheetDB Stable)</h2>
 
-<!-- 数据录入区域 -->
 <div class="card">
   <b>数据录入 / Data Entry</b>
   <div class="sync-tips">
@@ -250,7 +246,6 @@ select, input {
     📌 Click save after filling data, auto-write to Google Sheets DB!
   </div>
 
-  <!-- 桩号填写 -->
   <div class="form-group">
     <label class="label-bilingual">
       <span class="cn">桩号：</span>
@@ -269,14 +264,13 @@ select, input {
         <option value="W03">W03</option>
         <option value="E03">E03</option>
         <option value="E27">E27</option>
-        <option value="W22">W22</option> <!-- 新增W22 -->
+        <option value="W22">W22</option>
       </select>
       <span>-</span>
       <input id="pileSuffix" placeholder="01/02/03... / 01/02/03..." required onblur="formatPileSuffix()">
     </div>
   </div>
 
-  <!-- 桩径 -->
   <div class="form-group">
     <label class="label-bilingual">
       <span class="cn">桩径：</span>
@@ -289,7 +283,6 @@ select, input {
     </select>
   </div>
 
-  <!-- 当前环节 -->
   <div class="form-group">
     <label class="label-bilingual">
       <span class="cn">当前环节：</span>
@@ -311,7 +304,6 @@ select, input {
     </select>
   </div>
 
-  <!-- 钻机 -->
   <div id="rigContainer" class="form-group">
     <label class="label-bilingual">
       <span class="cn">钻机：</span>
@@ -327,7 +319,6 @@ select, input {
     </select>
   </div>
 
-  <!-- 实时深度 -->
   <div id="depthContainer" class="form-group">
     <label class="label-bilingual">
       <span class="cn">实时深度：</span>
@@ -337,7 +328,6 @@ select, input {
     <span class="depth-unit">m</span>
   </div>
 
-  <!-- 下笼进度 -->
   <div id="lowerProgressContainer" class="form-group">
     <label class="label-bilingual">
       <span class="cn">下笼进度：</span>
@@ -353,7 +343,6 @@ select, input {
     </select>
   </div>
 
-  <!-- 操作按钮 -->
   <div class="form-group">
     <button onclick="savePile()" id="saveBtn">保存 / Save</button>
     <button onclick="clearForm()" class="action-btn">清空 / Clear</button>
@@ -361,7 +350,6 @@ select, input {
   </div>
 </div>
 
-<!-- 数据展示区域 -->
 <div class="card">
   <b>桩进度总览 / Pile Progress Overview</b>
   <div class="search-bar">
@@ -407,8 +395,9 @@ select, input {
 </div>
 
 <script>
-// 替换为你的GAS部署URL
-const GOOGLE_API_URL = "https://script.google.com/macros/s/AKfycbz2eTsH2dNrfq9PbtorN3iNB0o4pkB_xwvMLCaxjwtqSAWyXVLCZkOmuqZPpam2SAmoiw/exec";
+// ===================== 只需修改这1行！=====================
+const SHEETDB_API_URL = "https://sheetdb.io/api/v1/gxqsx7676a3dp"; // 替换为你的SheetDB API Endpoint
+// =========================================================
 let piles = [];
 const steps = 12;
 const stageNames = [
@@ -418,14 +407,12 @@ const stageNames = [
   "Flushing and Air lifting", "Casting", "Backfill&Casing Extraction"
 ];
 
-// 页面初始化
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('searchInput').addEventListener('input', render);
   toggleFormElements();
   loadTableData();
 });
 
-// 控制表单元素显示/隐藏
 function toggleFormElements() {
   const stage = document.getElementById('stage').value;
   const depthContainer = document.getElementById('depthContainer');
@@ -437,7 +424,6 @@ function toggleFormElements() {
   lowerProgressContainer.classList.toggle('show', stage === '7');
 }
 
-// 格式化桩号后缀为3位数字
 function formatPileSuffix() {
   const suffixInput = document.getElementById('pileSuffix');
   let value = suffixInput.value.trim();
@@ -449,7 +435,6 @@ function formatPileSuffix() {
   }
 }
 
-// 拼接桩号
 function getCombinedPileNo() {
   const prefix1 = document.getElementById('pilePrefix1').value.trim();
   const prefix2 = document.getElementById('pilePrefix2').value.trim();
@@ -461,7 +446,6 @@ function getCombinedPileNo() {
   return `${prefix1}-${prefix2}-${suffix}`;
 }
 
-// 清空表单
 function clearForm() {
   document.getElementById('pilePrefix1').value = '';
   document.getElementById('pilePrefix2').value = '';
@@ -474,7 +458,6 @@ function clearForm() {
   toggleFormElements();
 }
 
-// 排序功能
 function sortPiles(key) {
   piles.sort((a, b) => {
     if (key === 'stage') {
@@ -486,7 +469,7 @@ function sortPiles(key) {
   render();
 }
 
-// 保存数据（核心修复版）
+// 核心修复：删除旧数据→新增新数据（避开更新匹配问题）
 async function savePile() {
   const pileNo = getCombinedPileNo();
   const pileDiameter = document.getElementById('pileDiameter').value.trim();
@@ -496,7 +479,6 @@ async function savePile() {
   const lowerProgress = stage === 7 ? document.getElementById('lowerProgress').value.trim() : '';
   const updateTime = new Date().toISOString();
 
-  // 验证必填项
   if (!pileNo) {
     alert('请完整填写桩号！/ Please complete pile no.!');
     return;
@@ -518,129 +500,88 @@ async function savePile() {
     return;
   }
 
-  // 显示加载状态
   const saveBtn = document.getElementById('saveBtn');
   const originalText = saveBtn.innerHTML;
   saveBtn.innerHTML = '<span class="loading"></span>保存中... / Saving...';
   saveBtn.disabled = true;
 
   try {
-    const response = await fetch(GOOGLE_API_URL, {
+    // 步骤1：删除同名桩号（无论是否存在，不影响后续）
+    await fetch(`${SHEETDB_API_URL}/pileNo/${encodeURIComponent(pileNo)}`, { method: 'DELETE' });
+
+    // 步骤2：新增数据（核心：直接新增，无需匹配）
+    const response = await fetch(SHEETDB_API_URL, {
       method: 'POST',
-      mode: 'cors',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        action: 'saveData',
-        pileNo,
-        pileDiameter,
-        stage: stage.toString(),
-        rig,
-        nowDepth,
-        lowerProgress,
-        updateTime
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        data: [{ pileNo, pileDiameter, stage: stage.toString(), rig, nowDepth, lowerProgress, updateTime }]
       })
     });
 
-    // 1. 检查HTTP状态
     if (!response.ok) {
-      throw new Error(`HTTP错误: ${response.status}`);
+      const errorText = await response.text();
+      throw new Error(`HTTP ${response.status}: ${errorText}`);
     }
 
-    // 2. 解析业务响应
-    const result = await response.json();
-    console.log('GAS返回结果:', result);
-    if (!result.success) {
-      throw new Error(result.message || "保存失败（业务逻辑错误）");
-    }
-
-    // 3. 执行成功逻辑
     await loadTableData();
     clearForm();
     alert('数据已成功保存！/ Data saved successfully!');
   } catch (error) {
     console.error('保存失败', error);
-    alert('保存失败：' + error.message + ' / Save failed: ' + error.message);
+    let errorMsg = error.message;
+    if (errorMsg.includes('Failed to fetch')) errorMsg = '网络错误或SheetDB地址错误';
+    if (errorMsg.includes('403')) errorMsg = '表格权限不足（需设为Anyone可编辑）';
+    if (errorMsg.includes('404')) errorMsg = 'SheetDB API地址错误';
+    alert(`保存失败：${errorMsg} / Save failed: ${errorMsg}`);
   } finally {
     saveBtn.innerHTML = originalText;
     saveBtn.disabled = false;
   }
 }
 
-// 加载表格数据
 async function loadTableData() {
   const tbody = document.getElementById('tableBody');
   tbody.innerHTML = '<tr><td colspan="8" style="padding:20px;">加载中... / Loading...</td></tr>';
   
   try {
-    const response = await fetch(`${GOOGLE_API_URL}?action=getAllData`, {
-      method: 'GET',
-      mode: 'cors',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      cache: 'no-cache'
-    });
+    const timestamp = new Date().getTime();
+    const response = await fetch(`${SHEETDB_API_URL}?t=${timestamp}`, { method: 'GET', cache: 'no-store' });
 
-    if (!response.ok) {
-      throw new Error(`请求失败：${response.status} ${response.statusText}`);
-    }
+    if (!response.ok) throw new Error(`请求失败：${response.status} ${response.statusText}`);
 
-    const result = await response.json();
-    console.log('从GAS获取的数据：', result);
-    
-    if (result.success) {
-      piles = result.data.filter(p => p.pileNo).map(p => ({
-        ...p,
-        stage: Math.max(0, Number(p.stage) - 1),
-        lowerProgress: p.lowerProgress || '-'
-      }));
-      render();
-    } else {
-      throw new Error(result.message || "加载数据失败");
-    }
+    const data = await response.json();
+    piles = Array.isArray(data) ? data.filter(p => p.pileNo).map(p => ({
+      ...p,
+      stage: Math.max(0, Math.min(11, Number(p.stage) || 0)),
+      pileDiameter: p.pileDiameter || '-',
+      rig: p.rig || '-',
+      nowDepth: p.nowDepth || '-',
+      lowerProgress: p.lowerProgress || '-'
+    })) : [];
+    render();
   } catch (error) {
     console.error('加载数据失败:', error);
-    tbody.innerHTML = `<tr><td colspan="8" style="padding:20px;">加载失败：${error.message} / Load failed: ${error.message}</td></tr>`;
+    let errorMsg = error.message.includes('Failed to fetch') ? '无法连接到SheetDB（检查网络/API地址）' : error.message;
+    tbody.innerHTML = `<tr><td colspan="8" style="padding:20px;">加载失败：${errorMsg} / Load failed: ${errorMsg}</td></tr>`;
   }
 }
 
-// 删除数据
 async function deletePile(pileNo) {
   if (!confirm(`确定删除桩号 ${pileNo}？/ Delete pile ${pileNo}?`)) return;
   
   try {
-    const response = await fetch(GOOGLE_API_URL, {
-      method: 'POST',
-      mode: 'cors',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        action: 'deleteData',
-        pileNo
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`删除失败：${response.status}`);
-    }
-
-    const result = await response.json();
-    if (!result.success) {
-      throw new Error(result.message || "删除失败（业务逻辑错误）");
-    }
+    const response = await fetch(`${SHEETDB_API_URL}/pileNo/${encodeURIComponent(pileNo)}`, { method: 'DELETE' });
+    if (!response.ok) throw new Error(`删除失败：${response.status}`);
 
     await loadTableData();
     alert('删除成功！/ Delete successful!');
   } catch (error) {
     console.error('删除失败', error);
-    alert('删除失败：' + error.message + ' / Delete failed: ' + error.message);
+    let errorMsg = error.message.includes('404') ? '未找到该桩号数据' : error.message;
+    alert(`删除失败：${errorMsg} / Delete failed: ${errorMsg}`);
   }
 }
 
-// 编辑数据（补充缺失的函数）
 function editPile(pileNo) {
   const pile = piles.find(p => p.pileNo === pileNo);
   if (!pile) {
@@ -648,13 +589,11 @@ function editPile(pileNo) {
     return;
   }
 
-  // 拆分桩号
   const parts = pile.pileNo.split('-');
   document.getElementById('pilePrefix1').value = parts[0] || '';
   document.getElementById('pilePrefix2').value = parts[1] || '';
   document.getElementById('pileSuffix').value = parts[2] || '';
   
-  // 回填数据
   document.getElementById('pileDiameter').value = pile.pileDiameter || '';
   document.getElementById('stage').value = pile.stage || '0';
   document.getElementById('rig').value = pile.rig || '';
@@ -665,18 +604,16 @@ function editPile(pileNo) {
   document.querySelector('.card').scrollIntoView({ behavior: 'smooth' });
 }
 
-// 渲染表格（完整实现）
 function render() {
   const tbody = document.getElementById('tableBody');
   const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
   tbody.innerHTML = '';
 
-  // 过滤数据
   const filteredPiles = piles.filter(p => 
     p.pileNo.toLowerCase().includes(searchTerm) || 
-    (p.rig && p.rig.toLowerCase().includes(searchTerm)) ||
-    (p.pileDiameter && p.pileDiameter.toLowerCase().includes(searchTerm)) ||
-    (p.lowerProgress && p.lowerProgress.toLowerCase().includes(searchTerm))
+    p.rig.toLowerCase().includes(searchTerm) ||
+    p.pileDiameter.toLowerCase().includes(searchTerm) ||
+    p.lowerProgress.toLowerCase().includes(searchTerm)
   );
 
   if (filteredPiles.length === 0) {
@@ -684,24 +621,17 @@ function render() {
     return;
   }
 
-  // 渲染每条数据
   filteredPiles.forEach(p => {
-    const stageNum = Number(p.stage) || 0;
-    const depth = p.nowDepth || '-';
-    const diameter = p.pileDiameter || '-';
-    const lowerProgress = p.lowerProgress || '-';
-    
-    // 生成进度圆点
+    const stageNum = Math.max(0, Math.min(11, Number(p.stage) || 0));
     let dots = '<div class="progress-container">';
     for (let i = 0; i < steps; i++) {
       let cls = 'dot';
       if (i < stageNum) cls += ' done';
       else if (i === stageNum) cls += ' current';
-      dots += `<span class="${cls}" title="${i+1} ${stageNames[i]}">${i+1}</span>`;
+      dots += `<span class="${cls}" title="${i+1} ${stageNames[i] || ''}">${i+1}</span>`;
     }
     dots += '</div>';
 
-    // 状态标签
     let statusClass = '';
     let statusText = '';
     let rowClass = '';
@@ -717,16 +647,15 @@ function render() {
       rowClass = 'complete-row';
     }
 
-    // 创建表格行
     const row = document.createElement('tr');
     if (rowClass) row.className = rowClass;
     row.innerHTML = `
       <td>${p.pileNo}</td>
-      <td>${diameter}</td>
-      <td>${p.rig || '-'}</td>
+      <td>${p.pileDiameter}</td>
+      <td>${p.rig}</td>
       <td>${dots}</td>
-      <td>${depth}</td>
-      <td>${lowerProgress}</td>
+      <td>${p.nowDepth}</td>
+      <td>${p.lowerProgress}</td>
       <td><span class="status ${statusClass}">${statusText}</span></td>
       <td>
         <button onclick="editPile('${p.pileNo}')" class="action-btn">编辑 / Edit</button>
