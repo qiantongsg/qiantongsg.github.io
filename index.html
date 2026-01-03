@@ -123,9 +123,15 @@ tr:hover {
   font-size: 12px;
   color: white;
 }
-.status-drilling { background-color: #4caf50; }
-.status-pouring { background-color: #ff9800; }
-.status-casing { background-color: #2196f3; }
+/* 不同状态的差异化颜色 */
+.status-pre-boring { background-color: #4caf50; }    /* 准备成孔 - 绿色 */
+.status-drilling { background-color: #ff9800; }     /* 成孔中 - 橙色 */
+.status-pre-lrc { background-color: #9c27b0; }      /* 已成孔准备下笼 - 紫色 */
+.status-lowering { background-color: #00bcd4; }     /* 下笼/下导管 - 青色 */
+.status-pending-casting { background-color: #ff5722; } /* 待浇筑 - 深橙色 */
+.status-casting { background-color: #e91e63; }      /* 浇筑中 - 粉色 */
+.status-casing-wait { background-color: #2196f3; }  /* 护筒待周转 - 蓝色 */
+
 .action-btn {
   background: #f5f5f5;
   color: #333;
@@ -373,8 +379,13 @@ select, input {
     <span>12=Backfill&Casing Extraction</span>
     <br>
     <strong>状态说明 / Status Description：</strong>
-    <span>1-6环节=成孔中 / 1-6 Stages=Drilling</span>
-    <span>7-11环节=待浇筑 / 7-11 Stages=Pending Casting</span>
+    <span>1-4环节=准备成孔 / 1-4 Stages=Pre-Boring</span>
+    <span>5环节=成孔中 / 5 Stage=Drilling</span>
+    <span>6-7环节=已成孔，准备下笼 / 6-7 Stages=Toe Confirmed, Prepare LRC</span>
+    <span>8环节=钢筋笼下放 / 8 Stage=Rebar Cage Lowering</span>
+    <span>9环节=导管下放 / 9 Stage=Tremie Pipe Lowering</span>
+    <span>10环节=待浇筑 / 10 Stage=Pending Casting</span>
+    <span>11环节=浇筑中 / 11 Stage=Casting</span>
     <span>12环节=护筒待周转 / 12 Stage=Casing Waiting for Turnover</span>
   </div>
   <table>
@@ -405,6 +416,13 @@ const stageNames = [
   "Boring Platform Making", "Boring", "Toe Confirmed",
   "RCL Platform Making", "Rebar Cage Lowering", "Tremie Pipe Lowering",
   "Flushing and Air lifting", "Casting", "Backfill&Casing Extraction"
+];
+// 环节对应的中文名称映射
+const stageCnNames = [
+  "放线", "护筒安装", "ECC检测",
+  "成孔平台制作", "成孔", "孔底确认",
+  "钢筋笼平台制作", "钢筋笼下放", "导管下放",
+  "清孔及气举", "浇筑", "回填及护筒提取"
 ];
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -635,14 +653,31 @@ function render() {
     let statusClass = '';
     let statusText = '';
     let rowClass = '';
-    if (stageNum >= 0 && stageNum <= 5) {
+    
+    // 调整后的状态判断逻辑
+    if (stageNum >= 0 && stageNum <= 3) { // 1-4环节（索引0-3）
+      statusClass = 'status-pre-boring';
+      statusText = '准备成孔 / Pre-Boring';
+    } else if (stageNum === 4) { // 5环节（索引4）
       statusClass = 'status-drilling';
       statusText = '成孔中 / Drilling';
-    } else if (stageNum >= 6 && stageNum <= 10) {
-      statusClass = 'status-pouring';
+    } else if (stageNum >= 5 && stageNum <= 6) { // 6-7环节（索引5-6）
+      statusClass = 'status-pre-lrc';
+      statusText = '已成孔，准备下笼 / Toe Confirmed, Prepare LRC';
+    } else if (stageNum === 7) { // 8环节（索引7）
+      statusClass = 'status-lowering';
+      statusText = `${stageCnNames[stageNum]} / ${stageNames[stageNum]}`; // 钢筋笼下放 / Rebar Cage Lowering
+    } else if (stageNum === 8) { // 9环节（索引8）
+      statusClass = 'status-lowering';
+      statusText = `${stageCnNames[stageNum]} / ${stageNames[stageNum]}`; // 导管下放 / Tremie Pipe Lowering
+    } else if (stageNum === 9) { // 10环节（索引9）
+      statusClass = 'status-pending-casting';
       statusText = '待浇筑 / Pending Casting';
-    } else if (stageNum === 11) {
-      statusClass = 'status-casing';
+    } else if (stageNum === 10) { // 11环节（索引10）
+      statusClass = 'status-casting';
+      statusText = '浇筑中 / Casting';
+    } else if (stageNum === 11) { // 12环节（索引11）
+      statusClass = 'status-casing-wait';
       statusText = '护筒待周转 / Casing Waiting';
       rowClass = 'complete-row';
     }
