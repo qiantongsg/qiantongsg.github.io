@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>打桩施工进度（SheetDB稳定版） / Boring Pile Progress (SheetDB Stable)</title>
+<style>
+body {
+  font-family: Arial, sans-serif;
+  background: #f5f7fa;
+  margin: 20px;
+  line-height: 1.5;
+}
+h2 { 
+  margin-bottom: 16px;
+  color: #333;
+  border-bottom: 2px solid #4caf50;
+  padding-bottom: 8px;
+}
+.card {
+  background: #fff;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0,0,0,.1);
+  margin-bottom: 20px;
+}
+.form-group {
+  margin-bottom: 15px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.pile-no-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.pile-no-group select, .pile-no-group input {
+  flex: 1;
+  min-width: 80px;
+}
+.pile-no-group span {
+  font-size: 16px;
+  color: #666;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+th, td {
+  padding: 10px;
+  border-bottom: 1px solid #eee;
+  text-align: center;
+  font-size: 14px;
+}
+th {
+  background-color: #f9f9f9;
+  color: #555;
+}
+tr:hover {
+  background-color: #f9f9f9;
+}
+.progress-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 5px 0;
+  flex-wrap: wrap;
+}
+.dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #ccc;
+  color: white;
+  font-size: 10px;
+  font-weight: bold;
+  transition: all 0.3s ease;
+  position: relative;
+}
+.dot.done { background: #4caf50; }
+.dot.current { 
+  background: #ff9800;
+  transform: scale(1.2);
+  box-shadow: 0 0 8px rgba(255, 152, 0, 0.5);
+}
+.dot::after {
+  content: attr(title);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  background: #333;
+  color: white;
+  padding: 8px 4px;
+  border-radius: 4px;
+  font-size: 10px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+  z-index: 100;
+}
+.dot:hover::after { opacity: 1; }
+.stage-legend {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 8px;
+  padding: 8px;
+  background: #f9f9f9;
+  border-radius: 4px;
+  line-height: 1.6;
+}
+.status {
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: white;
+}
+/* 不同状态的差异化颜色 */
+.status-pre-boring { background-color: #4caf50; }    /* 准备成孔 - 绿色 */
+.status-drilling { background-color: #ff9800; }     /* 成孔中 - 橙色 */
+.status-pre-lrc { background-color: #9c27b0; }      /* 已成孔准备下笼 - 紫色 */
+.status-lowering { background-color: #00bcd4; }     /* 下笼/下导管 - 青色 */
+.status-pending-casting { background-color: #ff5722; } /* 待浇筑 - 深橙色 */
+.status-casting { background-color: #e91e63; }      /* 浇筑中 - 粉色 */
+.status-casing-wait { background-color: #2196f3; }  /* 护筒待周转 - 蓝色 */
+
+.action-btn {
+  background: #f5f5f5;
+  color: #333;
+  margin-left: 5px;
+}
+button {
+  cursor: pointer;
+  background: #4caf50;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  transition: background 0.3s;
+  border-radius: 4px;
+}
+button:hover { background: #3d9140; }
+.refresh-btn { background: #2196f3; }
+.add-btn { background: #9c27b0; }
+.search-bar {
+  margin-bottom: 15px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+#searchInput {
+  flex-grow: 1;
+  min-width: 200px;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+.complete-row { background-color: #f0fff0; }
+.sync-tips {
+  font-size: 12px;
+  color: #666;
+  margin-top: 10px;
+  padding: 8px;
+  background: #f9f9f9;
+  border-radius: 4px;
+}
+.label-bilingual {
+  display: flex;
+  flex-direction: column;
+  min-width: 120px;
+  font-weight: 500;
+}
+.label-bilingual .cn {
+  font-size: 14px;
+  color: #333;
+}
+.label-bilingual .en {
+  font-size: 12px;
+  color: #666;
+  margin-top: 2px;
+}
+#depthContainer {
+  display: none;
+  margin-top: 10px;
+}
+#depthContainer.show {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+#lowerProgressContainer {
+  display: none;
+  margin-top: 10px;
+}
+#lowerProgressContainer.show {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.depth-unit {
+  font-size: 14px;
+  color: #666;
+  font-weight: 500;
+}
+#rigContainer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+#rigContainer.hide {
+  display: none;
+}
+select, input {
+  padding: 8px 12px;
+  font-size: 14px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  box-sizing: border-box;
+  min-width: 150px;
+}
+.loading {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 3px solid rgba(255,255,255,.3);
+  border-radius: 50%;
+  border-top-color: white;
+  animation: spin 1s ease-in-out infinite;
+  margin-right: 8px;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+</style>
+</head>
+<body>
+<h2>打桩施工进度（SheetDB稳定版） / Boring Pile Progress (SheetDB Stable)</h2>
+
+<div class="card">
+  <b>数据录入 / Data Entry</b>
+  <div class="sync-tips">
+    📌 填写数据后点击保存，自动写入 Google Sheets 数据库！
+    <br>
+    📌 Click save after filling data, auto-write to Google Sheets DB!
+  </div>
+
+  <div class="form-group">
+    <label class="label-bilingual">
+      <span class="cn">桩号：</span>
+      <span class="en">Pile No.</span>
+    </label>
+    <div class="pile-no-group">
+      <select id="pilePrefix1" required>
+        <option value="">请选择 / Please select</option>
+        <option value="GTC">GTC</option>
+        <option value="T5A">T5A</option>
+        <option value="T5B">T5B</option>
+      </select>
+      <span>-</span>
+      <select id="pilePrefix2" required>
+        <option value="">请选择 / Please select</option>
+        <option value="W03">W03</option>
+        <option value="E03">E03</option>
+        <option value="E27">E27</option>
+        <option value="W22">W22</option>
+      </select>
+      <span>-</span>
+      <input id="pileSuffix" placeholder="01/02/03... / 01/02/03..." required onblur="formatPileSuffix()">
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label class="label-bilingual">
+      <span class="cn">桩径：</span>
+      <span class="en">Diameter</span>
+    </label>
+    <select id="pileDiameter" required>
+      <option value="">请选择桩径 / Select Diameter</option>
+      <option value="2.0m">2.0m</option>
+      <option value="1.8m">1.8m</option>
+    </select>
+  </div>
+
+  <div class="form-group">
+    <label class="label-bilingual">
+      <span class="cn">当前环节：</span>
+      <span class="en">Current Status</span>
+    </label>
+    <select id="stage" onchange="toggleFormElements()">
+      <option value="0">1 Setting out</option>
+      <option value="1">2 Casing installing</option>
+      <option value="2">3 ECC Inspection</option>
+      <option value="3">4 Boring Platform Making</option>
+      <option value="4">5 Boring</option>
+      <option value="5">6 Toe Confirmed</option>
+      <option value="6">7 RCL Platform Making</option>
+      <option value="7">8 Rebar Cage Lowering</option>
+      <option value="8">9 Tremie Pipe Lowering</option>
+      <option value="9">10 Flushing and Air lifting</option>
+      <option value="10">11 Casting</option>
+      <option value="11">12 Backfill&Casing Extraction</option>
+    </select>
+  </div>
+
+  <div id="rigContainer" class="form-group">
+    <label class="label-bilingual">
+      <span class="cn">钻机：</span>
+      <span class="en">Rig No.</span>
+    </label>
+    <select id="rig">
+      <option value="">请选择钻机 / Please select rig</option>
+      <option value="XR 400E rig-59 (THL)">XR 400E rig-59 (THL)</option>
+      <option value="XR 420D rig-43 (THL)">XR 420D rig-43 (THL)</option>
+      <option value="XR 400D rig-44 (THL)">XR 400D rig-44 (THL)</option>
+      <option value="SW 420 rig-56 (sunward)">SW 420 rig-56 (sunward)</option>
+      <option value="SW 360 rig-57 (sunward)">SW 360 rig-57 (sunward)</option>
+    </select>
+  </div>
+
+  <div id="depthContainer" class="form-group">
+    <label class="label-bilingual">
+      <span class="cn">实时深度：</span>
+      <span class="en">Now Depth</span>
+    </label>
+    <input id="nowDepth" type="number" step="0.1" min="0" placeholder="输入深度（米）/ Input depth (m)">
+    <span class="depth-unit">m</span>
+  </div>
+
+  <div id="lowerProgressContainer" class="form-group">
+    <label class="label-bilingual">
+      <span class="cn">下笼进度：</span>
+      <span class="en">Lower Progress</span>
+    </label>
+    <select id="lowerProgress">
+      <option value="Section 6&5">Section 6&5</option>
+      <option value="Section 5&4">Section 5&4</option>
+      <option value="Section 4&3">Section 4&3</option>
+      <option value="Section 3&2">Section 3&2</option>
+      <option value="Section 2&1">Section 2&1</option>
+      <option value="Section 1&Hanging Bar">Section 1&Hanging Bar</option>
+    </select>
+  </div>
+
+  <div class="form-group">
+    <button onclick="savePile()" id="saveBtn">保存 / Save</button>
+    <button onclick="clearForm()" class="action-btn">清空 / Clear</button>
+    <button onclick="loadTableData()" class="refresh-btn">刷新数据 / Refresh Data</button>
+  </div>
+</div>
+
+<div class="card">
+  <b>桩进度总览 / Pile Progress Overview</b>
+  <div class="search-bar">
+    <input type="text" id="searchInput" placeholder="搜索桩号/钻机/桩径... / Search pile no./rig/diameter...">
+    <button onclick="sortPiles('pileNo')" class="action-btn">按桩号排序 / Sort by Pile No.</button>
+    <button onclick="sortPiles('stage')" class="action-btn">按进度排序 / Sort by Progress</button>
+  </div>
+  <div class="stage-legend">
+    <strong>进度编号说明 / Progress No. Description：</strong>
+    <span>1=Setting out</span>
+    <span>2=Casing installing</span>
+    <span>3=ECC Inspection</span>
+    <span>4=Boring Platform Making</span>
+    <span>5=Boring</span>
+    <span>6=Toe Confirmed</span>
+    <span>7=RCL Platform Making</span>
+    <span>8=Rebar Cage Lowering</span>
+    <span>9=Tremie Pipe Lowering</span>
+    <span>10=Flushing and Air lifting</span>
+    <span>11=Casting</span>
+    <span>12=Backfill&Casing Extraction</span>
+    <br>
+    <strong>状态说明 / Status Description：</strong>
+    <span>1-4环节=准备成孔 / 1-4 Stages=Pre-Boring</span>
+    <span>5环节=成孔中 / 5 Stage=Drilling</span>
+    <span>6-7环节=已成孔，准备下笼 / 6-7 Stages=Toe Confirmed, Prepare LRC</span>
+    <span>8环节=钢筋笼下放 / 8 Stage=Rebar Cage Lowering</span>
+    <span>9环节=导管下放 / 9 Stage=Tremie Pipe Lowering</span>
+    <span>10环节=待浇筑 / 10 Stage=Pending Casting</span>
+    <span>11环节=浇筑中 / 11 Stage=Casting</span>
+    <span>12环节=护筒待周转 / 12 Stage=Casing Waiting for Turnover</span>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>桩号 / Pile No.</th>
+        <th>桩径 / Diameter</th>
+        <th>钻机 / Rig No.</th>
+        <th>进度 / Progress</th>
+        <th>实时深度 / Now Depth (m)</th>
+        <th>下笼进度 / Lower Progress</th>
+        <th>状态 / Status</th>
+        <th>操作 / Operation</th>
+      </tr>
+    </thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+</div>
+
+<script>
+// ===================== 只需修改这1行！=====================
+const SHEETDB_API_URL = "https://sheetdb.io/api/v1/gxqsx7676a3dp"; // 替换为你的SheetDB API Endpoint
+// =========================================================
+let piles = [];
+const steps = 12;
+const stageNames = [
+  "Setting out", "Casing installing", "ECC Inspection",
+  "Boring Platform Making", "Boring", "Toe Confirmed",
+  "RCL Platform Making", "Rebar Cage Lowering", "Tremie Pipe Lowering",
+  "Flushing and Air lifting", "Casting", "Backfill&Casing Extraction"
+];
+// 环节对应的中文名称映射
+const stageCnNames = [
+  "放线", "护筒安装", "ECC检测",
+  "成孔平台制作", "成孔", "孔底确认",
+  "钢筋笼平台制作", "钢筋笼下放", "导管下放",
+  "清孔及气举", "浇筑", "回填及护筒提取"
+];
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('searchInput').addEventListener('input', render);
+  toggleFormElements();
+  loadTableData();
+});
+
+function toggleFormElements() {
+  const stage = document.getElementById('stage').value;
+  const depthContainer = document.getElementById('depthContainer');
+  const rigContainer = document.getElementById('rigContainer');
+  const lowerProgressContainer = document.getElementById('lowerProgressContainer');
+  
+  depthContainer.classList.toggle('show', stage === '4');
+  rigContainer.classList.toggle('hide', Number(stage) < 4 || Number(stage) >= 6);
+  lowerProgressContainer.classList.toggle('show', stage === '7');
+}
+
+function formatPileSuffix() {
+  const suffixInput = document.getElementById('pileSuffix');
+  let value = suffixInput.value.trim();
+  
+  if (value) {
+    value = value.replace(/\D/g, '');
+    value = value.padStart(3, '0');
+    suffixInput.value = value;
+  }
+}
+
+function getCombinedPileNo() {
+  const prefix1 = document.getElementById('pilePrefix1').value.trim();
+  const prefix2 = document.getElementById('pilePrefix2').value.trim();
+  const suffix = document.getElementById('pileSuffix').value.trim();
+  
+  formatPileSuffix();
+  
+  if (!prefix1 || !prefix2 || !suffix) return '';
+  return `${prefix1}-${prefix2}-${suffix}`;
+}
+
+function clearForm() {
+  document.getElementById('pilePrefix1').value = '';
+  document.getElementById('pilePrefix2').value = '';
+  document.getElementById('pileSuffix').value = '';
+  document.getElementById('pileDiameter').value = '';
+  document.getElementById('stage').value = '0';
+  document.getElementById('rig').value = '';
+  document.getElementById('nowDepth').value = '';
+  document.getElementById('lowerProgress').value = 'Section 6&5';
+  toggleFormElements();
+}
+
+function sortPiles(key) {
+  piles.sort((a, b) => {
+    if (key === 'stage') {
+      return Number(a.stage) - Number(b.stage);
+    } else {
+      return a[key].localeCompare(b[key]);
+    }
+  });
+  render();
+}
+
+// 核心修复：删除旧数据→新增新数据（避开更新匹配问题）
+async function savePile() {
+  const pileNo = getCombinedPileNo();
+  const pileDiameter = document.getElementById('pileDiameter').value.trim();
+  const stage = Number(document.getElementById('stage').value);
+  const rig = (Number(stage) >= 4 && Number(stage) < 6) ? document.getElementById('rig').value.trim() : '';
+  const nowDepth = stage === 4 ? document.getElementById('nowDepth').value.trim() : '';
+  const lowerProgress = stage === 7 ? document.getElementById('lowerProgress').value.trim() : '';
+  const updateTime = new Date().toISOString();
+
+  if (!pileNo) {
+    alert('请完整填写桩号！/ Please complete pile no.!');
+    return;
+  }
+  if (!pileDiameter) {
+    alert('请选择桩径！/ Please select diameter!');
+    return;
+  }
+  if (Number(stage) >= 4 && Number(stage) < 6 && !rig) {
+    alert('4-5环节必须选择钻机！/ Must select rig for stage 4-5!');
+    return;
+  }
+  if (stage === 4 && !nowDepth) {
+    alert('成孔环节必须填写实时深度！/ Must input depth for Boring stage!');
+    return;
+  }
+  if (stage === 7 && !lowerProgress) {
+    alert('钢筋笼下放环节必须选择下笼进度！/ Must select lower progress for Rebar Cage Lowering stage!');
+    return;
+  }
+
+  const saveBtn = document.getElementById('saveBtn');
+  const originalText = saveBtn.innerHTML;
+  saveBtn.innerHTML = '<span class="loading"></span>保存中... / Saving...';
+  saveBtn.disabled = true;
+
+  try {
+    // 步骤1：删除同名桩号（无论是否存在，不影响后续）
+    await fetch(`${SHEETDB_API_URL}/pileNo/${encodeURIComponent(pileNo)}`, { method: 'DELETE' });
+
+    // 步骤2：新增数据（核心：直接新增，无需匹配）
+    const response = await fetch(SHEETDB_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        data: [{ pileNo, pileDiameter, stage: stage.toString(), rig, nowDepth, lowerProgress, updateTime }]
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`HTTP ${response.status}: ${errorText}`);
+    }
+
+    await loadTableData();
+    clearForm();
+    alert('数据已成功保存！/ Data saved successfully!');
+  } catch (error) {
+    console.error('保存失败', error);
+    let errorMsg = error.message;
+    if (errorMsg.includes('Failed to fetch')) errorMsg = '网络错误或SheetDB地址错误';
+    if (errorMsg.includes('403')) errorMsg = '表格权限不足（需设为Anyone可编辑）';
+    if (errorMsg.includes('404')) errorMsg = 'SheetDB API地址错误';
+    alert(`保存失败：${errorMsg} / Save failed: ${errorMsg}`);
+  } finally {
+    saveBtn.innerHTML = originalText;
+    saveBtn.disabled = false;
+  }
+}
+
+async function loadTableData() {
+  const tbody = document.getElementById('tableBody');
+  tbody.innerHTML = '<tr><td colspan="8" style="padding:20px;">加载中... / Loading...</td></tr>';
+  
+  try {
+    const timestamp = new Date().getTime();
+    const response = await fetch(`${SHEETDB_API_URL}?t=${timestamp}`, { method: 'GET', cache: 'no-store' });
+
+    if (!response.ok) throw new Error(`请求失败：${response.status} ${response.statusText}`);
+
+    const data = await response.json();
+    piles = Array.isArray(data) ? data.filter(p => p.pileNo).map(p => ({
+      ...p,
+      stage: Math.max(0, Math.min(11, Number(p.stage) || 0)),
+      pileDiameter: p.pileDiameter || '-',
+      rig: p.rig || '-',
+      nowDepth: p.nowDepth || '-',
+      lowerProgress: p.lowerProgress || '-'
+    })) : [];
+    render();
+  } catch (error) {
+    console.error('加载数据失败:', error);
+    let errorMsg = error.message.includes('Failed to fetch') ? '无法连接到SheetDB（检查网络/API地址）' : error.message;
+    tbody.innerHTML = `<tr><td colspan="8" style="padding:20px;">加载失败：${errorMsg} / Load failed: ${errorMsg}</td></tr>`;
+  }
+}
+
+async function deletePile(pileNo) {
+  if (!confirm(`确定删除桩号 ${pileNo}？/ Delete pile ${pileNo}?`)) return;
+  
+  try {
+    const response = await fetch(`${SHEETDB_API_URL}/pileNo/${encodeURIComponent(pileNo)}`, { method: 'DELETE' });
+    if (!response.ok) throw new Error(`删除失败：${response.status}`);
+
+    await loadTableData();
+    alert('删除成功！/ Delete successful!');
+  } catch (error) {
+    console.error('删除失败', error);
+    let errorMsg = error.message.includes('404') ? '未找到该桩号数据' : error.message;
+    alert(`删除失败：${errorMsg} / Delete failed: ${errorMsg}`);
+  }
+}
+
+function editPile(pileNo) {
+  const pile = piles.find(p => p.pileNo === pileNo);
+  if (!pile) {
+    alert('未找到该桩号数据！/ No data found for this pile no.!');
+    return;
+  }
+
+  const parts = pile.pileNo.split('-');
+  document.getElementById('pilePrefix1').value = parts[0] || '';
+  document.getElementById('pilePrefix2').value = parts[1] || '';
+  document.getElementById('pileSuffix').value = parts[2] || '';
+  
+  document.getElementById('pileDiameter').value = pile.pileDiameter || '';
+  document.getElementById('stage').value = pile.stage || '0';
+  document.getElementById('rig').value = pile.rig || '';
+  document.getElementById('nowDepth').value = pile.nowDepth || '';
+  document.getElementById('lowerProgress').value = pile.lowerProgress || 'Section 6&5';
+  
+  toggleFormElements();
+  document.querySelector('.card').scrollIntoView({ behavior: 'smooth' });
+}
+
+function render() {
+  const tbody = document.getElementById('tableBody');
+  const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
+  tbody.innerHTML = '';
+
+  const filteredPiles = piles.filter(p => 
+    p.pileNo.toLowerCase().includes(searchTerm) || 
+    p.rig.toLowerCase().includes(searchTerm) ||
+    p.pileDiameter.toLowerCase().includes(searchTerm) ||
+    p.lowerProgress.toLowerCase().includes(searchTerm)
+  );
+
+  if (filteredPiles.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" style="padding:20px;">没有找到匹配的桩记录 / No matching pile records found</td></tr>';
+    return;
+  }
+
+  filteredPiles.forEach(p => {
+    const stageNum = Math.max(0, Math.min(11, Number(p.stage) || 0));
+    let dots = '<div class="progress-container">';
+    for (let i = 0; i < steps; i++) {
+      let cls = 'dot';
+      if (i < stageNum) cls += ' done';
+      else if (i === stageNum) cls += ' current';
+      dots += `<span class="${cls}" title="${i+1} ${stageNames[i] || ''}">${i+1}</span>`;
+    }
+    dots += '</div>';
+
+    let statusClass = '';
+    let statusText = '';
+    let rowClass = '';
+    
+    // 调整后的状态判断逻辑
+    if (stageNum >= 0 && stageNum <= 3) { // 1-4环节（索引0-3）
+      statusClass = 'status-pre-boring';
+      statusText = '准备成孔 / Pre-Boring';
+    } else if (stageNum === 4) { // 5环节（索引4）
+      statusClass = 'status-drilling';
+      statusText = '成孔中 / Drilling';
+    } else if (stageNum >= 5 && stageNum <= 6) { // 6-7环节（索引5-6）
+      statusClass = 'status-pre-lrc';
+      statusText = '已成孔，准备下笼 / Toe Confirmed, Prepare LRC';
+    } else if (stageNum === 7) { // 8环节（索引7）
+      statusClass = 'status-lowering';
+      statusText = `${stageCnNames[stageNum]} / ${stageNames[stageNum]}`; // 钢筋笼下放 / Rebar Cage Lowering
+    } else if (stageNum === 8) { // 9环节（索引8）
+      statusClass = 'status-lowering';
+      statusText = `${stageCnNames[stageNum]} / ${stageNames[stageNum]}`; // 导管下放 / Tremie Pipe Lowering
+    } else if (stageNum === 9) { // 10环节（索引9）
+      statusClass = 'status-pending-casting';
+      statusText = '待浇筑 / Pending Casting';
+    } else if (stageNum === 10) { // 11环节（索引10）
+      statusClass = 'status-casting';
+      statusText = '浇筑中 / Casting';
+    } else if (stageNum === 11) { // 12环节（索引11）
+      statusClass = 'status-casing-wait';
+      statusText = '护筒待周转 / Casing Waiting';
+      rowClass = 'complete-row';
+    }
+
+    const row = document.createElement('tr');
+    if (rowClass) row.className = rowClass;
+    row.innerHTML = `
+      <td>${p.pileNo}</td>
+      <td>${p.pileDiameter}</td>
+      <td>${p.rig}</td>
+      <td>${dots}</td>
+      <td>${p.nowDepth}</td>
+      <td>${p.lowerProgress}</td>
+      <td><span class="status ${statusClass}">${statusText}</span></td>
+      <td>
+        <button onclick="editPile('${p.pileNo}')" class="action-btn">编辑 / Edit</button>
+        <button onclick="deletePile('${p.pileNo}')" class="action-btn">删除 / Delete</button>
+      </td>
+    `;
+    tbody.appendChild(row);
+  });
+}
+</script>
+</body>
+</html>
