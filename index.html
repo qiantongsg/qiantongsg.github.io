@@ -340,6 +340,7 @@ select, input {
       <span class="en">Lower Progress</span>
     </label>
     <select id="lowerProgress">
+      <option value="Bottom Section Lowering">Bottom Section Lowering</option> <!-- 新增项 -->
       <option value="Section 6&5">Section 6&5</option>
       <option value="Section 5&4">Section 5&4</option>
       <option value="Section 4&3">Section 4&3</option>
@@ -472,7 +473,7 @@ function clearForm() {
   document.getElementById('stage').value = '0';
   document.getElementById('rig').value = '';
   document.getElementById('nowDepth').value = '';
-  document.getElementById('lowerProgress').value = 'Section 6&5';
+  document.getElementById('lowerProgress').value = 'Bottom Section Lowering'; // 默认值为新增选项
   toggleFormElements();
 }
 
@@ -616,7 +617,7 @@ function editPile(pileNo) {
   document.getElementById('stage').value = pile.stage || '0';
   document.getElementById('rig').value = pile.rig || '';
   document.getElementById('nowDepth').value = pile.nowDepth || '';
-  document.getElementById('lowerProgress').value = pile.lowerProgress || 'Section 6&5';
+  document.getElementById('lowerProgress').value = pile.lowerProgress || 'Bottom Section Lowering'; // 默认值为新增选项
   
   toggleFormElements();
   document.querySelector('.card').scrollIntoView({ behavior: 'smooth' });
@@ -627,6 +628,7 @@ function render() {
   const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
   tbody.innerHTML = '';
 
+  // 筛选符合搜索条件的桩数据
   const filteredPiles = piles.filter(p => 
     p.pileNo.toLowerCase().includes(searchTerm) || 
     p.rig.toLowerCase().includes(searchTerm) ||
@@ -639,8 +641,10 @@ function render() {
     return;
   }
 
+  // 渲染每一行数据
   filteredPiles.forEach(p => {
     const stageNum = Math.max(0, Math.min(11, Number(p.stage) || 0));
+    // 构建进度圆点
     let dots = '<div class="progress-container">';
     for (let i = 0; i < steps; i++) {
       let cls = 'dot';
@@ -650,38 +654,39 @@ function render() {
     }
     dots += '</div>';
 
+    // 确定状态样式和文本
     let statusClass = '';
     let statusText = '';
     let rowClass = '';
     
-    // 调整后的状态判断逻辑
-    if (stageNum >= 0 && stageNum <= 3) { // 1-4环节（索引0-3）
+    if (stageNum >= 0 && stageNum <= 3) { // 1-4环节：准备成孔
       statusClass = 'status-pre-boring';
       statusText = '准备成孔 / Pre-Boring';
-    } else if (stageNum === 4) { // 5环节（索引4）
+    } else if (stageNum === 4) { // 5环节：成孔中
       statusClass = 'status-drilling';
       statusText = '成孔中 / Drilling';
-    } else if (stageNum >= 5 && stageNum <= 6) { // 6-7环节（索引5-6）
+    } else if (stageNum >= 5 && stageNum <= 6) { // 6-7环节：已成孔准备下笼
       statusClass = 'status-pre-lrc';
       statusText = '已成孔，准备下笼 / Toe Confirmed, Prepare LRC';
-    } else if (stageNum === 7) { // 8环节（索引7）
+    } else if (stageNum === 7) { // 8环节：钢筋笼下放
       statusClass = 'status-lowering';
-      statusText = `${stageCnNames[stageNum]} / ${stageNames[stageNum]}`; // 钢筋笼下放 / Rebar Cage Lowering
-    } else if (stageNum === 8) { // 9环节（索引8）
+      statusText = `${stageCnNames[stageNum]} / ${stageNames[stageNum]}`;
+    } else if (stageNum === 8) { // 9环节：导管下放
       statusClass = 'status-lowering';
-      statusText = `${stageCnNames[stageNum]} / ${stageNames[stageNum]}`; // 导管下放 / Tremie Pipe Lowering
-    } else if (stageNum === 9) { // 10环节（索引9）
+      statusText = `${stageCnNames[stageNum]} / ${stageNames[stageNum]}`;
+    } else if (stageNum === 9) { // 10环节：待浇筑
       statusClass = 'status-pending-casting';
       statusText = '待浇筑 / Pending Casting';
-    } else if (stageNum === 10) { // 11环节（索引10）
+    } else if (stageNum === 10) { // 11环节：浇筑中
       statusClass = 'status-casting';
       statusText = '浇筑中 / Casting';
-    } else if (stageNum === 11) { // 12环节（索引11）
+    } else if (stageNum === 11) { // 12环节：护筒待周转
       statusClass = 'status-casing-wait';
       statusText = '护筒待周转 / Casing Waiting';
       rowClass = 'complete-row';
     }
 
+    // 创建表格行
     const row = document.createElement('tr');
     if (rowClass) row.className = rowClass;
     row.innerHTML = `
