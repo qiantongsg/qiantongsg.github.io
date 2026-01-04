@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <title>打桩施工进度（SheetDB稳定版） / Boring Pile Progress (SheetDB Stable)</title>
 <style>
+/* 原有样式完全保留，此处省略（和原代码一致） */
 body {
   font-family: Arial, sans-serif;
   background: #f5f7fa;
@@ -123,7 +124,6 @@ tr:hover {
   font-size: 12px;
   color: white;
 }
-/* 不同状态的差异化颜色 */
 .status-pre-boring { background-color: #4caf50; }    /* 准备成孔 - 绿色 */
 .status-drilling { background-color: #ff9800; }     /* 成孔中 - 橙色 */
 .status-pre-lrc { background-color: #9c27b0; }      /* 已成孔准备下笼 - 紫色 */
@@ -239,6 +239,104 @@ select, input {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* 新增：时间线模态框样式 */
+.timeline-modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.5);
+  z-index: 9999;
+  align-items: center;
+  justify-content: center;
+}
+.timeline-modal-content {
+  background: white;
+  padding: 25px;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 600px;
+  max-height: 80vh;
+  overflow-y: auto;
+  position: relative;
+}
+.close-modal {
+  position: absolute;
+  top: 15px;
+  right: 20px;
+  font-size: 24px;
+  cursor: pointer;
+  color: #666;
+}
+.timeline-title {
+  margin-top: 0;
+  color: #333;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 10px;
+}
+.timeline-item {
+  position: relative;
+  padding-left: 25px;
+  margin-bottom: 15px;
+  padding-bottom: 15px;
+  border-bottom: 1px dashed #eee;
+}
+.timeline-item:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+.timeline-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 5px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #4caf50;
+}
+.timeline-time {
+  font-size: 12px;
+  color: #999;
+  margin-bottom: 5px;
+}
+.timeline-content {
+  font-size: 14px;
+  line-height: 1.4;
+}
+.timeline-stage {
+  font-weight: bold;
+  color: #4caf50;
+}
+
+/* 优化操作按钮容器和按钮样式 - 解决排版不整齐问题 */
+.operation-container {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  padding: 5px;
+}
+.operation-btn {
+  padding: 6px 8px !important;
+  font-size: 11px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  margin: 0 !important;
+  display: inline-block !important;
+  white-space: nowrap;
+}
+.edit-btn { background: #4caf50 !important; }
+.edit-btn:hover { background: #3d9140 !important; }
+.delete-btn { background: #f44336 !important; }
+.delete-btn:hover { background: #d32f2f !important; }
+.timeline-btn { background: #607d8b !important; }
+.timeline-btn:hover { background: #506978 !important; }
+.archive-btn { background: #ff5722 !important; }
+.archive-btn:hover { background: #e64a19 !important; }
 </style>
 </head>
 <body>
@@ -252,6 +350,7 @@ select, input {
     📌 Click save after filling data, auto-write to Google Sheets DB!
   </div>
 
+  <!-- 原有录入表单完全不变 -->
   <div class="form-group">
     <label class="label-bilingual">
       <span class="cn">桩号：</span>
@@ -340,7 +439,7 @@ select, input {
       <span class="en">Lower Progress</span>
     </label>
     <select id="lowerProgress">
-      <option value="Bottom Section Lowering">Bottom Section Lowering</option> <!-- 新增项 -->
+      <option value="Bottom Section Lowering">Bottom Section Lowering</option>
       <option value="Section 6&5">Section 6&5</option>
       <option value="Section 5&4">Section 5&4</option>
       <option value="Section 4&3">Section 4&3</option>
@@ -406,10 +505,21 @@ select, input {
   </table>
 </div>
 
+<!-- 新增：时间线模态框 -->
+<div class="timeline-modal" id="timelineModal">
+  <div class="timeline-modal-content">
+    <span class="close-modal" onclick="closeTimelineModal()">&times;</span>
+    <h3 class="timeline-title" id="timelinePileNo">桩号：XXX 时间线记录</h3>
+    <div id="timelineContent"></div>
+  </div>
+</div>
+
 <script>
-// ===================== 只需修改这1行！=====================
-const SHEETDB_API_URL = "https://sheetdb.io/api/v1/gxqsx7676a3dp"; // 替换为你的SheetDB API Endpoint
+// ===================== 需修改这2个URL！=====================
+const SHEETDB_API_URL = "https://sheetdb.io/api/v1/8v7h4b19i7dhd"; // 主数据SheetDB地址
+const TIMELINE_SHEETDB_URL = "https://sheetdb.io/api/v1/p60j2la4efpuh"; // 时间线表SheetDB地址
 // =========================================================
+
 let piles = [];
 const steps = 12;
 const stageNames = [
@@ -418,7 +528,6 @@ const stageNames = [
   "RCL Platform Making", "Rebar Cage Lowering", "Tremie Pipe Lowering",
   "Flushing and Air lifting", "Casting", "Backfill&Casing Extraction"
 ];
-// 环节对应的中文名称映射
 const stageCnNames = [
   "放线", "护筒安装", "ECC检测",
   "成孔平台制作", "成孔", "孔底确认",
@@ -432,6 +541,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadTableData();
 });
 
+// 原有函数完全保留
 function toggleFormElements() {
   const stage = document.getElementById('stage').value;
   const depthContainer = document.getElementById('depthContainer');
@@ -473,7 +583,7 @@ function clearForm() {
   document.getElementById('stage').value = '0';
   document.getElementById('rig').value = '';
   document.getElementById('nowDepth').value = '';
-  document.getElementById('lowerProgress').value = 'Bottom Section Lowering'; // 默认值为新增选项
+  document.getElementById('lowerProgress').value = 'Bottom Section Lowering';
   toggleFormElements();
 }
 
@@ -488,7 +598,7 @@ function sortPiles(key) {
   render();
 }
 
-// 核心修复：删除旧数据→新增新数据（避开更新匹配问题）
+// 【核心修复】增强savePile：确保时间字段格式正确，增加调试日志
 async function savePile() {
   const pileNo = getCombinedPileNo();
   const pileDiameter = document.getElementById('pileDiameter').value.trim();
@@ -496,7 +606,13 @@ async function savePile() {
   const rig = (Number(stage) >= 4 && Number(stage) < 6) ? document.getElementById('rig').value.trim() : '';
   const nowDepth = stage === 4 ? document.getElementById('nowDepth').value.trim() : '';
   const lowerProgress = stage === 7 ? document.getElementById('lowerProgress').value.trim() : '';
-  const updateTime = new Date().toISOString();
+  
+  // 【关键修复1】使用Google Sheets兼容的时间格式
+  const now = new Date();
+  // 格式1：ISO字符串（备用）
+  const isoTime = now.toISOString();
+  // 格式2：Google Sheets直接识别的格式（优先使用）
+  const sheetTime = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
 
   if (!pileNo) {
     alert('请完整填写桩号！/ Please complete pile no.!');
@@ -525,22 +641,40 @@ async function savePile() {
   saveBtn.disabled = true;
 
   try {
-    // 步骤1：删除同名桩号（无论是否存在，不影响后续）
+    // 1. 先删除原有主数据（保持原有逻辑）
     await fetch(`${SHEETDB_API_URL}/pileNo/${encodeURIComponent(pileNo)}`, { method: 'DELETE' });
 
-    // 步骤2：新增数据（核心：直接新增，无需匹配）
-    const response = await fetch(SHEETDB_API_URL, {
+    // 2. 保存新的主数据（【关键修复2】同时写入两种时间格式，确保兼容）
+    const mainData = {
+      pileNo: pileNo,
+      pileDiameter: pileDiameter,
+      stage: stage.toString(),
+      rig: rig,
+      nowDepth: nowDepth,
+      lowerProgress: lowerProgress,
+      updateTime: isoTime,          // ISO格式时间
+      updateTimeSheet: sheetTime,   // Sheets兼容格式时间
+      archived: "FALSE"
+    };
+    
+    console.log('准备写入主数据：', mainData); // 调试日志
+    
+    const mainResponse = await fetch(SHEETDB_API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        data: [{ pileNo, pileDiameter, stage: stage.toString(), rig, nowDepth, lowerProgress, updateTime }]
-      })
+      headers: { 
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({ data: [mainData] })
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`HTTP ${response.status}: ${errorText}`);
+    if (!mainResponse.ok) {
+      const errorText = await mainResponse.text();
+      throw new Error(`主数据保存失败: HTTP ${mainResponse.status}: ${errorText}`);
     }
+
+    // 3. 自动记录时间线（【关键修复3】传递两种时间格式）
+    await saveTimelineRecord(pileNo, stage, pileDiameter, rig, nowDepth, lowerProgress, isoTime, sheetTime);
 
     await loadTableData();
     clearForm();
@@ -558,6 +692,48 @@ async function savePile() {
   }
 }
 
+// 【核心修复】重写saveTimelineRecord函数
+async function saveTimelineRecord(pileNo, stage, pileDiameter, rig, nowDepth, lowerProgress, isoTime, sheetTime) {
+  // 确保时间参数有值
+  const recordIsoTime = isoTime || new Date().toISOString();
+  const recordSheetTime = sheetTime || new Date().toLocaleString('zh-CN');
+  
+  // 【关键修复4】时间线数据同时包含多种时间格式
+  const timelineRecord = {
+    pileNo: pileNo,
+    stage: stage.toString(),
+    stageCn: stageCnNames[stage],
+    stageEn: stageNames[stage],
+    pileDiameter: pileDiameter,
+    rig: rig || '-',
+    nowDepth: nowDepth || '-',
+    lowerProgress: lowerProgress || '-',
+    timestamp: recordIsoTime,       // ISO格式
+    time: recordSheetTime,          // Sheets兼容格式
+    createTime: new Date().toString() // 备用格式
+  };
+
+  console.log('准备写入时间线数据：', timelineRecord); // 调试日志
+  
+  const response = await fetch(TIMELINE_SHEETDB_URL, {
+    method: 'POST',
+    headers: { 
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
+    body: JSON.stringify({ data: [timelineRecord] })
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`时间线保存失败: HTTP ${response.status}: ${errorText}`);
+  }
+  
+  const responseData = await response.json();
+  console.log('时间线写入结果：', responseData); // 调试日志
+}
+
+// 修改loadTableData函数中的过滤条件
 async function loadTableData() {
   const tbody = document.getElementById('tableBody');
   tbody.innerHTML = '<tr><td colspan="8" style="padding:20px;">加载中... / Loading...</td></tr>';
@@ -569,13 +745,15 @@ async function loadTableData() {
     if (!response.ok) throw new Error(`请求失败：${response.status} ${response.statusText}`);
 
     const data = await response.json();
-    piles = Array.isArray(data) ? data.filter(p => p.pileNo).map(p => ({
+    piles = Array.isArray(data) ? data.filter(p => p.pileNo && p.archived !== "TRUE").map(p => ({
       ...p,
       stage: Math.max(0, Math.min(11, Number(p.stage) || 0)),
       pileDiameter: p.pileDiameter || '-',
       rig: p.rig || '-',
       nowDepth: p.nowDepth || '-',
-      lowerProgress: p.lowerProgress || '-'
+      lowerProgress: p.lowerProgress || '-',
+      archived: p.archived || "FALSE",
+      updateTime: p.updateTime || p.updateTimeSheet || new Date().toISOString() // 兼容两种时间字段
     })) : [];
     render();
   } catch (error) {
@@ -585,125 +763,309 @@ async function loadTableData() {
   }
 }
 
-async function deletePile(pileNo) {
-  if (!confirm(`确定删除桩号 ${pileNo}？/ Delete pile ${pileNo}?`)) return;
-  
-  try {
-    const response = await fetch(`${SHEETDB_API_URL}/pileNo/${encodeURIComponent(pileNo)}`, { method: 'DELETE' });
-    if (!response.ok) throw new Error(`删除失败：${response.status}`);
-
-    await loadTableData();
-    alert('删除成功！/ Delete successful!');
-  } catch (error) {
-    console.error('删除失败', error);
-    let errorMsg = error.message.includes('404') ? '未找到该桩号数据' : error.message;
-    alert(`删除失败：${errorMsg} / Delete failed: ${errorMsg}`);
-  }
-}
-
-function editPile(pileNo) {
-  const pile = piles.find(p => p.pileNo === pileNo);
-  if (!pile) {
-    alert('未找到该桩号数据！/ No data found for this pile no.!');
-    return;
-  }
-
-  const parts = pile.pileNo.split('-');
-  document.getElementById('pilePrefix1').value = parts[0] || '';
-  document.getElementById('pilePrefix2').value = parts[1] || '';
-  document.getElementById('pileSuffix').value = parts[2] || '';
-  
-  document.getElementById('pileDiameter').value = pile.pileDiameter || '';
-  document.getElementById('stage').value = pile.stage || '0';
-  document.getElementById('rig').value = pile.rig || '';
-  document.getElementById('nowDepth').value = pile.nowDepth || '';
-  document.getElementById('lowerProgress').value = pile.lowerProgress || 'Bottom Section Lowering'; // 默认值为新增选项
-  
-  toggleFormElements();
-  document.querySelector('.card').scrollIntoView({ behavior: 'smooth' });
-}
-
+// 渲染表格（优化按钮排版）
 function render() {
   const tbody = document.getElementById('tableBody');
   const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
-  tbody.innerHTML = '';
-
-  // 筛选符合搜索条件的桩数据
-  const filteredPiles = piles.filter(p => 
-    p.pileNo.toLowerCase().includes(searchTerm) || 
-    p.rig.toLowerCase().includes(searchTerm) ||
-    p.pileDiameter.toLowerCase().includes(searchTerm) ||
-    p.lowerProgress.toLowerCase().includes(searchTerm)
-  );
+  
+  // 筛选搜索结果
+  const filteredPiles = piles.filter(pile => {
+    return pile.pileNo.toLowerCase().includes(searchTerm) ||
+           pile.rig.toLowerCase().includes(searchTerm) ||
+           pile.pileDiameter.toLowerCase().includes(searchTerm);
+  });
 
   if (filteredPiles.length === 0) {
     tbody.innerHTML = '<tr><td colspan="8" style="padding:20px;">没有找到匹配的桩记录 / No matching pile records found</td></tr>';
     return;
   }
 
-  // 渲染每一行数据
-  filteredPiles.forEach(p => {
-    const stageNum = Math.max(0, Math.min(11, Number(p.stage) || 0));
-    // 构建进度圆点
-    let dots = '<div class="progress-container">';
-    for (let i = 0; i < steps; i++) {
-      let cls = 'dot';
-      if (i < stageNum) cls += ' done';
-      else if (i === stageNum) cls += ' current';
-      dots += `<span class="${cls}" title="${i+1} ${stageNames[i] || ''}">${i+1}</span>`;
-    }
-    dots += '</div>';
+  tbody.innerHTML = filteredPiles.map(pile => {
+    // 生成进度点
+    const progressDots = Array.from({ length: steps }, (_, i) => {
+      let className = 'dot';
+      if (i < pile.stage) className += ' done';
+      if (i == pile.stage) className += ' current';
+      return `<div class="${className}" title="${i+1}: ${stageCnNames[i]} / ${stageNames[i]}">${i+1}</div>`;
+    }).join('');
 
-    // 确定状态样式和文本
-    let statusClass = '';
-    let statusText = '';
-    let rowClass = '';
-    
-    if (stageNum >= 0 && stageNum <= 3) { // 1-4环节：准备成孔
+    // 确定状态标签
+    let statusClass, statusTextCn, statusTextEn;
+    if (pile.stage < 4) {
       statusClass = 'status-pre-boring';
-      statusText = '准备成孔 / Pre-Boring';
-    } else if (stageNum === 4) { // 5环节：成孔中
+      statusTextCn = '准备成孔';
+      statusTextEn = 'Pre-Boring';
+    } else if (pile.stage == 4) {
       statusClass = 'status-drilling';
-      statusText = '成孔中 / Drilling';
-    } else if (stageNum >= 5 && stageNum <= 6) { // 6-7环节：已成孔准备下笼
+      statusTextCn = '成孔中';
+      statusTextEn = 'Drilling';
+    } else if (pile.stage < 7) {
       statusClass = 'status-pre-lrc';
-      statusText = '已成孔，准备下笼 / Toe Confirmed, Prepare LRC';
-    } else if (stageNum === 7) { // 8环节：钢筋笼下放
+      statusTextCn = '已成孔准备下笼';
+      statusTextEn = 'Pre-LRC';
+    } else if (pile.stage == 7) {
       statusClass = 'status-lowering';
-      statusText = `${stageCnNames[stageNum]} / ${stageNames[stageNum]}`;
-    } else if (stageNum === 8) { // 9环节：导管下放
+      statusTextCn = '钢筋笼下放';
+      statusTextEn = 'Lowering RCL';
+    } else if (pile.stage == 8) {
       statusClass = 'status-lowering';
-      statusText = `${stageCnNames[stageNum]} / ${stageNames[stageNum]}`;
-    } else if (stageNum === 9) { // 10环节：待浇筑
+      statusTextCn = '导管下放';
+      statusTextEn = 'Lowering Tremie';
+    } else if (pile.stage == 9) {
       statusClass = 'status-pending-casting';
-      statusText = '待浇筑 / Pending Casting';
-    } else if (stageNum === 10) { // 11环节：浇筑中
+      statusTextCn = '待浇筑';
+      statusTextEn = 'Pending Casting';
+    } else if (pile.stage == 10) {
       statusClass = 'status-casting';
-      statusText = '浇筑中 / Casting';
-    } else if (stageNum === 11) { // 12环节：护筒待周转
+      statusTextCn = '浇筑中';
+      statusTextEn = 'Casting';
+    } else {
       statusClass = 'status-casing-wait';
-      statusText = '护筒待周转 / Casing Waiting';
-      rowClass = 'complete-row';
+      statusTextCn = '护筒待周转';
+      statusTextEn = 'Casing Wait';
     }
 
-    // 创建表格行
-    const row = document.createElement('tr');
-    if (rowClass) row.className = rowClass;
-    row.innerHTML = `
-      <td>${p.pileNo}</td>
-      <td>${p.pileDiameter}</td>
-      <td>${p.rig}</td>
-      <td>${dots}</td>
-      <td>${p.nowDepth}</td>
-      <td>${p.lowerProgress}</td>
-      <td><span class="status ${statusClass}">${statusText}</span></td>
-      <td>
-        <button onclick="editPile('${p.pileNo}')" class="action-btn">编辑 / Edit</button>
-        <button onclick="deletePile('${p.pileNo}')" class="action-btn">删除 / Delete</button>
-      </td>
+    return `
+      <tr class="${pile.stage >= 11 ? 'complete-row' : ''}">
+        <td>${pile.pileNo}</td>
+        <td>${pile.pileDiameter}</td>
+        <td>${pile.rig}</td>
+        <td><div class="progress-container">${progressDots}</div></td>
+        <td>${pile.nowDepth}</td>
+        <td>${pile.lowerProgress}</td>
+        <td><span class="status ${statusClass}">${statusTextCn} / ${statusTextEn}</span></td>
+        <td>
+          <div class="operation-container">
+            <button onclick="editPile('${pile.pileNo}')" class="operation-btn edit-btn">编辑 / Edit</button>
+            <button onclick="deletePile('${pile.pileNo}')" class="operation-btn delete-btn">删除 / Delete</button>
+            <button onclick="showTimeline('${pile.pileNo}')" class="operation-btn timeline-btn">时间线 / Timeline</button>
+            <button onclick="archivePile('${pile.pileNo}')" class="operation-btn archive-btn">存档 / Archive</button>
+          </div>
+        </td>
+      </tr>
     `;
-    tbody.appendChild(row);
-  });
+  }).join('');
+}
+
+// 编辑桩记录（保持原有逻辑）
+function editPile(pileNo) {
+  const pile = piles.find(p => p.pileNo === pileNo);
+  if (!pile) return;
+
+  // 拆分桩号
+  const [prefix1, prefix2, suffix] = pile.pileNo.split('-');
+  if (prefix1 && prefix2 && suffix) {
+    document.getElementById('pilePrefix1').value = prefix1;
+    document.getElementById('pilePrefix2').value = prefix2;
+    document.getElementById('pileSuffix').value = suffix;
+  }
+
+  document.getElementById('pileDiameter').value = pile.pileDiameter;
+  document.getElementById('stage').value = pile.stage;
+  document.getElementById('rig').value = pile.rig || '';
+  document.getElementById('nowDepth').value = pile.nowDepth || '';
+  document.getElementById('lowerProgress').value = pile.lowerProgress || 'Bottom Section Lowering';
+  
+  toggleFormElements();
+  
+  // 滚动到顶部表单
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// 新增：删除桩记录功能
+async function deletePile(pileNo) {
+  if (!confirm(`确定要删除桩号 ${pileNo} 的所有数据吗？此操作不可恢复！\nAre you sure to delete all data of pile ${pileNo}? This operation cannot be undone!`)) {
+    return;
+  }
+
+  try {
+    // 删除主数据
+    const mainResponse = await fetch(`${SHEETDB_API_URL}/pileNo/${encodeURIComponent(pileNo)}`, { method: 'DELETE' });
+    if (!mainResponse.ok) throw new Error(`删除主数据失败: HTTP ${mainResponse.status}`);
+
+    // 重新加载数据
+    await loadTableData();
+    alert(`桩 ${pileNo} 已成功删除！\nPile ${pileNo} deleted successfully!`);
+  } catch (error) {
+    console.error('删除失败', error);
+    let errorMsg = error.message;
+    if (errorMsg.includes('Failed to fetch')) errorMsg = '网络错误或SheetDB地址错误';
+    if (errorMsg.includes('403')) errorMsg = '表格权限不足（需设为Anyone可编辑）';
+    if (errorMsg.includes('404')) errorMsg = 'SheetDB API地址错误';
+    alert(`删除失败：${errorMsg}\nDelete failed: ${errorMsg}`);
+  }
+}
+
+// 修复存档功能：解决405错误 + 同步延迟问题
+async function archivePile(pileNo) {
+  if (!confirm(`确定要将 ${pileNo} 存档吗？存档后将不在列表中显示。\nAre you sure to archive ${pileNo}? It will not show in list.`)) {
+    return;
+  }
+
+  // 先从本地缓存获取桩数据，避免SheetDB同步延迟
+  const localPile = piles.find(p => p.pileNo === pileNo);
+  if (!localPile) {
+    alert('未找到该桩数据（本地缓存）/ Pile data not found (local cache)');
+    return;
+  }
+
+  try {
+    // 1. 先删除原记录
+    await fetch(`${SHEETDB_API_URL}/pileNo/${encodeURIComponent(pileNo)}`, { method: 'DELETE' });
+
+    // 2. 直接使用本地缓存的数据保存存档记录（不再远程查询）
+    // 【修复】存档时也保留时间字段
+    await fetch(SHEETDB_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        data: [{ 
+          ...localPile, 
+          archived: "TRUE", 
+          updateTime: localPile.updateTime || new Date().toISOString(),
+          updateTimeSheet: localPile.updateTimeSheet || new Date().toLocaleString('zh-CN')
+        }]
+      })
+    });
+
+    // 3. 重新加载数据（会自动过滤已存档记录）
+    await loadTableData();
+    alert(`桩 ${pileNo} 已成功存档！\nPile ${pileNo} archived successfully!`);
+  } catch (error) {
+    console.error('存档失败', error);
+    let errorMsg = error.message;
+    if (errorMsg.includes('Failed to fetch')) errorMsg = '网络错误或SheetDB地址错误';
+    if (errorMsg.includes('403')) errorMsg = '表格权限不足（需设为Anyone可编辑）';
+    if (errorMsg.includes('404')) errorMsg = 'SheetDB API地址错误';
+    alert(`存档失败：${errorMsg}\nArchive failed: ${errorMsg}`);
+  }
+}
+
+// 【核心修复】增强时间线展示功能
+async function showTimeline(pileNo) {
+  try {
+    const timestamp = new Date().getTime();
+    const url = `${TIMELINE_SHEETDB_URL}?t=${timestamp}&search=pileNo:${encodeURIComponent(pileNo)}`;
+    const response = await fetch(url, { method: 'GET', cache: 'no-store' });
+    
+    console.log('获取时间线URL：', url); // 调试日志
+    
+    if (!response.ok) {
+      // 特殊处理：404表示无记录，不报错
+      if (response.status === 404) {
+        document.getElementById('timelineContent').innerHTML = '<p>暂无时间线记录 / No timeline records</p>';
+      } else {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+    } else {
+      const timelineData = await response.json();
+      console.log('获取到的时间线数据：', timelineData); // 调试日志
+      
+      if (!Array.isArray(timelineData) || timelineData.length === 0) {
+        document.getElementById('timelineContent').innerHTML = '<p>暂无时间线记录 / No timeline records</p>';
+      } else {
+        // 按时间排序（最新的在前面）
+        timelineData.sort((a, b) => {
+          const timeA = a.timestamp || a.time || a.createTime || 0;
+          const timeB = b.timestamp || b.time || b.createTime || 0;
+          return new Date(timeB) - new Date(timeA);
+        });
+        
+        document.getElementById('timelineContent').innerHTML = timelineData.map(item => {
+          // 【关键修复】优先使用能解析的时间字段
+          const timeStr = item.time || item.timestamp || item.createTime || '未知时间';
+          const formattedTime = formatDateTime(timeStr);
+          
+          return `
+            <div class="timeline-item">
+              <div class="timeline-time">${formattedTime}</div>
+              <div class="timeline-content">
+                <span class="timeline-stage">环节 ${item.stage}：${item.stageCn || '未知环节'} / Stage ${item.stage}: ${item.stageEn || 'Unknown Stage'}</span>
+                <br>桩径 / Diameter: ${item.pileDiameter || '-'}
+                ${item.rig && item.rig !== '-' ? `<br>钻机 / Rig: ${item.rig}` : ''}
+                ${item.nowDepth && item.nowDepth !== '-' ? `<br>深度 / Depth: ${item.nowDepth}m` : ''}
+                ${item.lowerProgress && item.lowerProgress !== '-' ? `<br>下笼进度 / Lower Progress: ${item.lowerProgress}` : ''}
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+    
+    document.getElementById('timelinePileNo').textContent = `桩号：${pileNo} 时间线记录 / Pile No.: ${pileNo} Timeline`;
+    document.getElementById('timelineModal').style.display = 'flex';
+  } catch (error) {
+    console.error('显示时间线失败', error);
+    // 更友好的错误提示
+    let errorMsg = error.message;
+    if (errorMsg.includes('Failed to fetch')) errorMsg = '网络错误或时间线SheetDB地址错误';
+    if (errorMsg.includes('403')) errorMsg = '时间线表格权限不足（需设为Anyone可编辑）';
+    if (errorMsg.includes('404')) errorMsg = '时间线SheetDB API地址错误';
+    alert(`获取时间线失败：${errorMsg}\nFailed to load timeline: ${errorMsg}`);
+  }
+}
+
+function closeTimelineModal() {
+  document.getElementById('timelineModal').style.display = 'none';
+}
+
+// 【核心修复】增强时间格式化函数，兼容更多格式
+function formatDateTime(timeStr) {
+  // 验证输入有效性
+  if (!timeStr || typeof timeStr !== 'string') {
+    return '未知时间 / Unknown Time';
+  }
+  
+  // 尝试多种解析方式
+  let date = null;
+  
+  // 方式1：直接解析
+  date = new Date(timeStr);
+  if (!isNaN(date.getTime())) {
+    return formatDateToLocal(date);
+  }
+  
+  // 方式2：修复常见格式问题
+  let fixedString = timeStr;
+  // 处理 2026-01-04 12:00:00 格式
+  fixedString = fixedString.replace(' ', 'T');
+  // 处理缺少时区的情况
+  if (!fixedString.endsWith('Z') && !fixedString.includes('+')) {
+    fixedString += 'Z';
+  }
+  date = new Date(fixedString);
+  if (!isNaN(date.getTime())) {
+    return formatDateToLocal(date);
+  }
+  
+  // 方式3：处理中文格式 2026/01/04 12:00:00
+  fixedString = timeStr.replace(/\//g, '-');
+  date = new Date(fixedString);
+  if (!isNaN(date.getTime())) {
+    return formatDateToLocal(date);
+  }
+  
+  // 所有方式都失败，返回原始字符串
+  return `${timeStr} (格式不支持) / ${timeStr} (Unsupported Format)`;
+}
+
+// 辅助函数：统一格式化日期为本地格式
+function formatDateToLocal(date) {
+  try {
+    const dateStr = date.toLocaleDateString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    const timeStr = date.toLocaleTimeString('zh-CN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+    return `${dateStr} ${timeStr}`;
+  } catch (e) {
+    return date.toString();
+  }
 }
 </script>
 </body>
