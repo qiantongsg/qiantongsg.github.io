@@ -2,9 +2,9 @@
 <html lang="zh">
 <head>
 <meta charset="UTF-8">
-<title>打桩施工进度（SheetDB稳定版） / Boring Pile Progress (SheetDB Stable)</title>
+<title>打桩施工进度（最终优化版） / Boring Pile Progress (Final Optimized)</title>
 <style>
-/* 原有样式完全保留，此处省略（和原代码一致） */
+/* 基础样式 */
 body {
   font-family: Arial, sans-serif;
   background: #f5f7fa;
@@ -240,7 +240,7 @@ select, input {
   to { transform: rotate(360deg); }
 }
 
-/* 新增：时间线模态框样式 */
+/* 时间线模态框样式 */
 .timeline-modal {
   display: none;
   position: fixed;
@@ -312,8 +312,14 @@ select, input {
   font-weight: bold;
   color: #4caf50;
 }
+.timeline-delete-btn {
+  background: #f44336 !important;
+  padding: 2px 6px !important;
+  font-size: 10px !important;
+  margin-top: 5px !important;
+}
 
-/* 优化操作按钮容器和按钮样式 - 解决排版不整齐问题 */
+/* 操作按钮容器样式 */
 .operation-container {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -337,20 +343,100 @@ select, input {
 .timeline-btn:hover { background: #506978 !important; }
 .archive-btn { background: #ff5722 !important; }
 .archive-btn:hover { background: #e64a19 !important; }
+
+/* 回收站样式 */
+.recycle-bin-card {
+  background: #fff8e1;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0,0,0,.1);
+  margin-bottom: 20px;
+}
+.recycle-btn {
+  background: #ff9800 !important;
+  margin-bottom: 10px !important;
+}
+.recycle-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+  font-size: 12px;
+}
+.recycle-table th, .recycle-table td {
+  padding: 8px;
+  border-bottom: 1px solid #eee;
+  text-align: center;
+}
+.restore-btn {
+  background: #4caf50 !important;
+  padding: 4px 8px !important;
+  font-size: 10px !important;
+}
+.permanent-delete-btn {
+  display: none !important; /* 隐藏永久删除按钮，仅Google Sheet授权用户可操作 */
+}
+
+/* 操作日志样式 */
+.log-container {
+  margin-top: 20px;
+  padding: 15px;
+  background: #f9f9f9;
+  border-radius: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+  font-size: 12px;
+  color: #666;
+}
+.log-title {
+  font-weight: bold;
+  margin-bottom: 10px;
+  color: #333;
+}
+.log-item {
+  margin-bottom: 5px;
+  padding-bottom: 5px;
+  border-bottom: 1px dashed #eee;
+}
+.log-operator {
+  color: #2196f3;
+  font-weight: bold;
+}
+
+/* 回退记录样式 */
+.timeline-item.rollback::before {
+  background: #f44336;
+}
+.rollback-stage {
+  color: #f44336 !important;
+}
+
+/* 客户端信息提示样式 */
+.client-info {
+  font-size: 11px;
+  color: #999;
+  margin-top: 5px;
+  padding: 5px;
+  background: #f5f5f5;
+  border-radius: 4px;
+}
 </style>
 </head>
 <body>
-<h2>打桩施工进度（SheetDB稳定版） / Boring Pile Progress (SheetDB Stable)</h2>
+<h2>打桩施工进度（最终优化版） / Boring Pile Progress (Final Optimized)</h2>
 
 <div class="card">
   <b>数据录入 / Data Entry</b>
   <div class="sync-tips">
     📌 填写数据后点击保存，自动写入 Google Sheets 数据库！
-    <br>
-    📌 Click save after filling data, auto-write to Google Sheets DB!
+    <br>📌 Click save after filling data, auto-write to Google Sheets DB!
   </div>
 
-  <!-- 原有录入表单完全不变 -->
+  <!-- 新增：客户端信息展示（仅管理员可见） -->
+  <div class="client-info" id="clientInfo">
+    加载客户端信息中... / Loading client info...
+  </div>
+
+  <!-- 录入表单 -->
   <div class="form-group">
     <label class="label-bilingual">
       <span class="cn">桩号：</span>
@@ -505,7 +591,36 @@ select, input {
   </table>
 </div>
 
-<!-- 新增：时间线模态框 -->
+<!-- 回收站 -->
+<div class="recycle-bin-card" id="recycleBinCard">
+  <button class="recycle-btn" onclick="toggleRecycle()">隐藏回收站 / Hide Recycle</button>
+  <b>数据回收站 / Data Recycle</b>
+  <div class="sync-tips">
+    📌 已删除/存档的记录会保留在此处，可恢复！永久删除需通过Google Sheet操作！
+    <br>📌 Deleted/archived records are kept here, can be restored! Permanent delete via Google Sheet!
+  </div>
+  <table class="recycle-table">
+    <thead>
+      <tr>
+        <th>桩号 / Pile No.</th>
+        <th>桩径 / Diameter</th>
+        <th>最后进度 / Last Stage</th>
+        <th>操作时间 / Operation Time</th>
+        <th>操作类型 / Operation Type</th>
+        <th>操作 / Operation</th>
+      </tr>
+    </thead>
+    <tbody id="recycleTableBody"></tbody>
+  </table>
+</div>
+
+<!-- 操作日志 -->
+<div class="log-container" id="logContainer">
+  <div class="log-title">操作日志 / Operation Log</div>
+  <div id="logContent"></div>
+</div>
+
+<!-- 时间线模态框 -->
 <div class="timeline-modal" id="timelineModal">
   <div class="timeline-modal-content">
     <span class="close-modal" onclick="closeTimelineModal()">&times;</span>
@@ -515,12 +630,15 @@ select, input {
 </div>
 
 <script>
-// ===================== 需修改这2个URL！=====================
+// ===================== 配置项 =====================
 const SHEETDB_API_URL = "https://sheetdb.io/api/v1/8v7h4b19i7dhd"; // 主数据SheetDB地址
 const TIMELINE_SHEETDB_URL = "https://sheetdb.io/api/v1/p60j2la4efpuh"; // 时间线表SheetDB地址
-// =========================================================
+const RECYCLE_SHEETDB_URL = "https://sheetdb.io/api/v1/i0sy8a0b5oeu0"; // 回收站SheetDB地址
 
 let piles = [];
+let recyclePiles = [];
+let operationLogs = [];
+let clientInfo = { ip: "未知IP", user: "未知用户", device: "未知设备" }; // 客户端信息
 const steps = 12;
 const stageNames = [
   "Setting out", "Casing installing", "ECC Inspection",
@@ -535,13 +653,542 @@ const stageCnNames = [
   "清孔及气举", "浇筑", "回填及护筒提取"
 ];
 
-document.addEventListener('DOMContentLoaded', () => {
+// 初始化
+document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('searchInput').addEventListener('input', render);
   toggleFormElements();
+  
+  // 加载客户端信息（IP+用户名+设备）
+  await loadClientInfo();
+  
+  // 初始化数据
   loadTableData();
+  loadRecycleData();
+  await addLog("系统初始化 / System Init", "系统已加载完成 / System loaded successfully");
 });
 
-// 原有函数完全保留
+// ===================== 核心新增：自动获取客户端信息（IP+电脑用户名+设备） =====================
+async function loadClientInfo() {
+  try {
+    // 1. 获取公网IP（使用免费接口，无需密钥）
+    const ipRes = await fetch('https://api.ipify.org?format=json');
+    const ipData = await ipRes.json();
+    clientInfo.ip = ipData.ip || "未知IP";
+
+    // 2. 获取设备信息
+    const userAgent = window.navigator.userAgent;
+    if (userAgent.includes('Windows')) {
+      clientInfo.device = "Windows PC";
+      // 尝试获取Windows用户名（部分浏览器/环境支持）
+      clientInfo.user = window.username || 
+                        localStorage.getItem('lastOperator') || 
+                        "Windows用户 / Windows User";
+    } else if (userAgent.includes('Mac')) {
+      clientInfo.device = "Mac OS PC";
+      clientInfo.user = "Mac用户 / Mac User";
+    } else if (userAgent.includes('Mobile')) {
+      clientInfo.device = "移动设备 / Mobile Device";
+      clientInfo.user = "移动端用户 / Mobile User";
+    } else {
+      clientInfo.device = "未知设备 / Unknown Device";
+      clientInfo.user = "未知用户 / Unknown User";
+    }
+
+    // 3. 显示客户端信息到页面
+    document.getElementById('clientInfo').innerHTML = `
+      🖥️ 设备 / Device: ${clientInfo.device} | 
+      🌐 IP地址 / IP: ${clientInfo.ip} | 
+      👤 当前操作人 / Current Operator: ${clientInfo.user}
+    `;
+
+  } catch (e) {
+    console.log('获取客户端信息失败 / Get client info failed:', e);
+    document.getElementById('clientInfo').innerHTML = `
+      🖥️ 设备 / Device: 未知 | 
+      🌐 IP地址 / IP: 未知 | 
+      👤 当前操作人 / Current Operator: 未知
+    `;
+  }
+}
+
+// ===================== 增强版操作日志（包含IP+用户名+设备） =====================
+async function addLog(operation, detail) {
+  const now = new Date();
+  const timeStr = formatDateToLocal(now);
+  
+  // 组装操作人信息
+  const operatorInfo = `【操作人 / Operator: ${clientInfo.user} | IP: ${clientInfo.ip} | 设备 / Device: ${clientInfo.device}】`;
+  
+  const logItem = {
+    time: timeStr,
+    operation: operation,
+    detail: `${detail} ${operatorInfo}`,
+    operator: clientInfo.user,
+    ip: clientInfo.ip,
+    device: clientInfo.device
+  };
+  
+  operationLogs.unshift(logItem); // 最新的在前面
+  // 只保留最近100条日志
+  if (operationLogs.length > 100) {
+    operationLogs = operationLogs.slice(0, 100);
+  }
+  
+  // 更新日志显示
+  renderLogs();
+  
+  // 可选：将日志写入数据库（如需持久化，取消注释）
+  // await saveLogToDB(logItem);
+}
+
+function renderLogs() {
+  const logContent = document.getElementById('logContent');
+  logContent.innerHTML = operationLogs.map(log => `
+    <div class="log-item">
+      <strong>${log.time}</strong> - ${log.operation}：
+      <span>${log.detail.replace(`【操作人 / Operator: ${log.operator} | IP: ${log.ip} | 设备 / Device: ${log.device}】`, 
+        `<span class="log-operator">【操作人 / Operator: ${log.operator} | IP: ${log.ip}】</span>`)}</span>
+    </div>
+  `).join('');
+}
+
+// 可选：将日志写入SheetDB（需新建日志表格）
+async function saveLogToDB(logItem) {
+  try {
+    // 需提前创建日志表格，表头：time,operation,detail,operator,ip,device
+    await fetch(`${SHEETDB_API_URL.replace('/api/v1/', '/api/v1/logs/')}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: [logItem] })
+    });
+  } catch (e) {
+    console.log('日志保存失败 / Log save failed:', e);
+  }
+}
+
+// ===================== 1. 增强的确认提示（删除/存档） =====================
+async function deletePile(pileNo) {
+  const confirmDelete = confirm(`
+    ⚠️ 确认删除桩号 ${pileNo} 吗？
+    说明：删除后数据不会丢失，会进入回收站，可随时恢复！
+    \n
+    ⚠️ Confirm delete pile ${pileNo}?
+    Note: Data will not be lost, it will go to recycle and can be restored at any time!
+  `);
+  
+  if (!confirmDelete) return;
+
+  try {
+    const pile = piles.find(p => p.pileNo === pileNo);
+    if (!pile) {
+      alert('未找到该桩数据 / Pile data not found');
+      return;
+    }
+    
+    // 保存到回收站
+    const now = new Date();
+    await fetch(RECYCLE_SHEETDB_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        data: [{
+          pileNo: pile.pileNo,
+          pileDiameter: pile.pileDiameter,
+          stage: pile.stage,
+          rig: pile.rig,
+          nowDepth: pile.nowDepth,
+          lowerProgress: pile.lowerProgress,
+          operationTime: formatDateToLocal(now),
+          operationType: "删除 / Delete",
+          operator: clientInfo.user, // 记录操作人
+          operatorIP: clientInfo.ip  // 记录操作IP
+        }]
+      })
+    });
+    
+    // 删除主数据
+    await fetch(`${SHEETDB_API_URL}/pileNo/${encodeURIComponent(pileNo)}`, { method: 'DELETE' });
+
+    // 刷新数据
+    await loadTableData();
+    await loadRecycleData();
+    await addLog("删除数据 / Delete Data", `删除桩号 ${pileNo}（已进入回收站）/ Delete pile ${pileNo} (moved to recycle)`);
+    alert(`✅ 桩 ${pileNo} 已删除！
+    数据已进入回收站，可随时恢复！
+    \n✅ Pile ${pileNo} deleted!
+    Data moved to recycle, can be restored at any time!`);
+  } catch (error) {
+    console.error('删除失败', error);
+    let errorMsg = error.message;
+    if (errorMsg.includes('Failed to fetch')) errorMsg = '网络错误或SheetDB地址错误';
+    if (errorMsg.includes('403')) errorMsg = '表格权限不足（需设为Anyone可编辑）';
+    if (errorMsg.includes('404')) errorMsg = 'SheetDB API地址错误';
+    alert(`删除失败：${errorMsg}\nDelete failed: ${errorMsg}`);
+  }
+}
+
+async function archivePile(pileNo) {
+  const confirmArchive = confirm(`
+    ⚠️ 确认存档桩号 ${pileNo} 吗？
+    说明：存档后数据会进入回收站，可随时恢复！
+    \n
+    ⚠️ Confirm archive pile ${pileNo}?
+    Note: Data will go to recycle and can be restored at any time!
+  `);
+  
+  if (!confirmArchive) return;
+
+  const localPile = piles.find(p => p.pileNo === pileNo);
+  if (!localPile) {
+    alert('未找到该桩数据 / Pile data not found');
+    return;
+  }
+
+  try {
+    // 保存到回收站
+    const now = new Date();
+    await fetch(RECYCLE_SHEETDB_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        data: [{
+          pileNo: localPile.pileNo,
+          pileDiameter: localPile.pileDiameter,
+          stage: localPile.stage,
+          rig: localPile.rig,
+          nowDepth: localPile.nowDepth,
+          lowerProgress: localPile.lowerProgress,
+          operationTime: formatDateToLocal(now),
+          operationType: "存档 / Archive",
+          operator: clientInfo.user, // 记录操作人
+          operatorIP: clientInfo.ip  // 记录操作IP
+        }]
+      })
+    });
+    
+    // 更新主数据为存档状态
+    await fetch(`${SHEETDB_API_URL}/pileNo/${encodeURIComponent(pileNo)}`, { method: 'DELETE' });
+    await fetch(SHEETDB_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        data: [{ 
+          ...localPile, 
+          archived: "TRUE", 
+          updateTime: localPile.updateTime || new Date().toISOString(),
+          updateTimeSheet: localPile.updateTimeSheet || new Date().toLocaleString('zh-CN'),
+          operator: clientInfo.user, // 记录最后操作人
+          operatorIP: clientInfo.ip  // 记录最后操作IP
+        }]
+      })
+    });
+
+    await loadTableData();
+    await loadRecycleData();
+    await addLog("存档数据 / Archive Data", `存档桩号 ${pileNo}（已进入回收站）/ Archive pile ${pileNo} (moved to recycle)`);
+    alert(`✅ 桩 ${pileNo} 已存档！
+    数据已进入回收站，可随时恢复！
+    \n✅ Pile ${pileNo} archived!
+    Data moved to recycle, can be restored at any time!`);
+  } catch (error) {
+    console.error('存档失败', error);
+    let errorMsg = error.message;
+    if (errorMsg.includes('Failed to fetch')) errorMsg = '网络错误或SheetDB地址错误';
+    if (errorMsg.includes('403')) errorMsg = '表格权限不足（需设为Anyone可编辑）';
+    if (errorMsg.includes('404')) errorMsg = 'SheetDB API地址错误';
+    alert(`存档失败：${errorMsg}\nArchive failed: ${errorMsg}`);
+  }
+}
+
+// ===================== 2. 步骤回退/重复/跳跃的确认提示 =====================
+function validateStage(pileNo, newStage) {
+  const existingPile = piles.find(p => p.pileNo === pileNo);
+  if (!existingPile) return true;
+  
+  const oldStage = Number(existingPile.stage);
+  newStage = Number(newStage);
+  
+  // 1. 步骤回退确认
+  if (newStage < oldStage) {
+    const confirmRollback = confirm(`
+      ⚠️ 施工步骤将从 ${oldStage+1}(${stageNames[oldStage]}) 回退到 ${newStage+1}(${stageNames[newStage]})！
+      请确认这是修正输入错误的必要操作！
+      \n
+      ⚠️ Stage will rollback from ${oldStage+1}(${stageNames[oldStage]}) to ${newStage+1}(${stageNames[newStage]})!
+      Confirm this is necessary to correct input error!
+    `);
+    
+    if (!confirmRollback) return false;
+  }
+  
+  // 2. 重复步骤确认
+  if (newStage === oldStage) {
+    const confirmRepeat = confirm(`
+      ℹ️ 当前步骤已为 ${newStage+1}(${stageNames[newStage]})，确认要重新保存吗？
+      这会生成新的时间线记录！
+      \n
+      ℹ️ Current stage is already ${newStage+1}(${stageNames[newStage]}), confirm to resave?
+      This will generate new timeline record!
+    `);
+    
+    if (!confirmRepeat) return false;
+  }
+  
+  // 3. 步骤跳跃确认（超过1步）
+  if (newStage > oldStage + 1) {
+    const confirmJump = confirm(`
+      ⚠️ 步骤跳跃过大！当前步骤：${oldStage+1}，尝试设置：${newStage+1}，跳过了${newStage-oldStage-1}个步骤！
+      确认这是正确的操作吗？
+      \n
+      ⚠️ Stage jump too big! Current stage: ${oldStage+1}, Trying to set: ${newStage+1}, skipped ${newStage-oldStage-1} stages!
+      Confirm this is correct?
+    `);
+    
+    if (!confirmJump) return false;
+  }
+  
+  return true;
+}
+
+// ===================== 3. 回收站仅支持查看和恢复 =====================
+function toggleRecycle() {
+  const recycleCard = document.getElementById('recycleBinCard');
+  recycleCard.style.display = recycleCard.style.display === 'none' ? 'block' : 'none';
+}
+
+async function loadRecycleData() {
+  try {
+    const response = await fetch(`${RECYCLE_SHEETDB_URL}?t=${new Date().getTime()}`, { 
+      method: 'GET', 
+      cache: 'no-store' 
+    });
+    if (response.ok) {
+      const data = await response.json();
+      recyclePiles = Array.isArray(data) ? data : [];
+      renderRecycleTable();
+    }
+  } catch (e) {
+    console.log('加载回收站失败 / Load recycle failed:', e);
+    document.getElementById('recycleTableBody').innerHTML = '<tr><td colspan="6">加载回收站失败 / Load recycle failed</td></tr>';
+  }
+}
+
+function renderRecycleTable() {
+  const tbody = document.getElementById('recycleTableBody');
+  if (recyclePiles.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6">回收站为空 / Recycle is empty</td></tr>';
+    return;
+  }
+  
+  tbody.innerHTML = recyclePiles.map(pile => `
+    <tr>
+      <td>${pile.pileNo}</td>
+      <td>${pile.pileDiameter || '-'}</td>
+      <td>${pile.stage || '-'}</td>
+      <td>${pile.operationTime || '-'}</td>
+      <td>${pile.operationType || '-'}</td>
+      <td>
+        <button onclick="restorePile('${pile.pileNo}')" class="restore-btn">恢复 / Restore</button>
+        <button class="permanent-delete-btn" onclick="alert('永久删除需通过Google Sheet操作！/ Permanent delete via Google Sheet!')">永久删除 / Delete</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function restorePile(pileNo) {
+  const confirmRestore = confirm(`
+    确认恢复桩号 ${pileNo} 吗？
+    恢复后数据将回到主进度表中！
+    \n
+    Confirm restore pile ${pileNo}?
+    Data will be restored to main table!
+  `);
+  
+  if (!confirmRestore) return;
+  
+  try {
+    const pile = recyclePiles.find(p => p.pileNo === pileNo);
+    if (!pile) {
+      alert('未找到该记录 / Record not found');
+      return;
+    }
+    
+    // 恢复到主表
+    await fetch(SHEETDB_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        data: [{
+          pileNo: pile.pileNo,
+          pileDiameter: pile.pileDiameter,
+          stage: pile.stage,
+          rig: pile.rig,
+          nowDepth: pile.nowDepth,
+          lowerProgress: pile.lowerProgress,
+          archived: "FALSE",
+          updateTime: new Date().toISOString(),
+          operator: clientInfo.user, // 记录恢复操作人
+          operatorIP: clientInfo.ip  // 记录恢复操作IP
+        }]
+      })
+    });
+    
+    // 从回收站删除
+    await fetch(`${RECYCLE_SHEETDB_URL}/pileNo/${encodeURIComponent(pileNo)}`, { method: 'DELETE' });
+    
+    // 刷新数据
+    await loadTableData();
+    await loadRecycleData();
+    await addLog("恢复数据 / Restore Data", `恢复桩号 ${pileNo} / Restore pile ${pileNo}`);
+    alert(`✅ 桩 ${pileNo} 已恢复！
+    数据已回到主进度表中！
+    \n✅ Pile ${pileNo} restored!
+    Data back to main table!`);
+  } catch (e) {
+    console.error('恢复失败 / Restore failed:', e);
+    alert('恢复失败 / Restore failed: ' + e.message);
+  }
+}
+
+// ===================== 4. 时间线支持删除操作 =====================
+async function showTimeline(pileNo) {
+  try {
+    const timestamp = new Date().getTime();
+    const url = `${TIMELINE_SHEETDB_URL}?t=${timestamp}&search=pileNo:${encodeURIComponent(pileNo)}`;
+    const response = await fetch(url, { method: 'GET', cache: 'no-store' });
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        document.getElementById('timelineContent').innerHTML = '<p>暂无时间线记录 / No timeline records</p>';
+      } else {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+    } else {
+      const timelineData = await response.json();
+      
+      if (!Array.isArray(timelineData) || timelineData.length === 0) {
+        document.getElementById('timelineContent').innerHTML = '<p>暂无时间线记录 / No timeline records</p>';
+      } else {
+        timelineData.sort((a, b) => {
+          const timeA = a.timestamp || a.time || a.createTime || 0;
+          const timeB = b.timestamp || b.time || b.createTime || 0;
+          return new Date(timeB) - new Date(timeA);
+        });
+        
+        document.getElementById('timelineContent').innerHTML = timelineData.map((item, index) => {
+          const timeStr = item.time || item.timestamp || item.createTime || '未知时间';
+          const formattedTime = formatDateTime(timeStr);
+          
+          // 检测是否为回退记录
+          let isRollback = false;
+          if (index < timelineData.length - 1) {
+            const nextItem = timelineData[index + 1];
+            if (Number(item.stage) < Number(nextItem.stage)) {
+              isRollback = true;
+            }
+          }
+          
+          // 生成唯一ID用于删除
+          const recordId = item.id || `${pileNo}-${index}`;
+          
+          return `
+            <div class="timeline-item ${isRollback ? 'rollback' : ''}">
+              <div class="timeline-time">${formattedTime} ${isRollback ? '[回退记录 / Rollback]' : ''}</div>
+              <div class="timeline-content">
+                <span class="timeline-stage ${isRollback ? 'rollback-stage' : ''}">环节 ${item.stage}：${item.stageCn || '未知环节'} / Stage ${item.stage}: ${item.stageEn || 'Unknown Stage'}</span>
+                ${isRollback ? '<br><span style="color:red;">⚠️ 此记录为步骤回退 / This is a stage rollback record</span>' : ''}
+                <br>桩径 / Diameter: ${item.pileDiameter || '-'}
+                ${item.rig && item.rig !== '-' ? `<br>钻机 / Rig: ${item.rig}` : ''}
+                ${item.nowDepth && item.nowDepth !== '-' ? `<br>深度 / Depth: ${item.nowDepth}m` : ''}
+                ${item.lowerProgress && item.lowerProgress !== '-' ? `<br>下笼进度 / Lower Progress: ${item.lowerProgress}` : ''}
+                ${item.operator ? `<br>操作人 / Operator: <span class="log-operator">${item.operator}</span>` : ''}
+                <button onclick="deleteTimelineRecord('${pileNo}', '${recordId}', ${index})" class="timeline-delete-btn">删除此记录 / Delete This Record</button>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+    
+    document.getElementById('timelinePileNo').textContent = `桩号：${pileNo} 时间线记录 / Pile No.: ${pileNo} Timeline`;
+    document.getElementById('timelineModal').style.display = 'flex';
+  } catch (error) {
+    console.error('显示时间线失败', error);
+    let errorMsg = error.message;
+    if (errorMsg.includes('Failed to fetch')) errorMsg = '网络错误或时间线SheetDB地址错误';
+    if (errorMsg.includes('403')) errorMsg = '时间线表格权限不足（需设为Anyone可编辑）';
+    if (errorMsg.includes('404')) errorMsg = '时间线SheetDB API地址错误';
+    alert(`获取时间线失败：${errorMsg}\nFailed to load timeline: ${errorMsg}`);
+  }
+}
+
+async function deleteTimelineRecord(pileNo, recordId, index) {
+  const confirmDelete = confirm(`
+    ⚠️ 确认删除这条时间线记录吗？
+    此操作不可恢复！
+    \n
+    ⚠️ Confirm delete this timeline record?
+    This operation cannot be undone!
+  `);
+  
+  if (!confirmDelete) return;
+  
+  try {
+    let deleteUrl = '';
+    if (recordId.includes('-')) {
+      const response = await fetch(`${TIMELINE_SHEETDB_URL}?search=pileNo:${encodeURIComponent(pileNo)}`, {
+        method: 'GET',
+        cache: 'no-store'
+      });
+      
+      if (response.ok) {
+        const timelineData = await response.json();
+        if (timelineData.length > index) {
+          const itemToDelete = timelineData[timelineData.length - 1 - index];
+          if (itemToDelete.id) {
+            deleteUrl = `${TIMELINE_SHEETDB_URL}/${itemToDelete.id}`;
+          } else {
+            deleteUrl = `${TIMELINE_SHEETDB_URL}/pileNo/${encodeURIComponent(pileNo)}/row/${index+1}`;
+          }
+        }
+      }
+    } else {
+      deleteUrl = `${TIMELINE_SHEETDB_URL}/${recordId}`;
+    }
+    
+    if (deleteUrl) {
+      await fetch(deleteUrl, { method: 'DELETE' });
+      await addLog("删除时间线记录 / Delete Timeline Record", `删除桩号 ${pileNo} 的时间线记录 / Delete timeline record of pile ${pileNo}`);
+      showTimeline(pileNo);
+      alert('✅ 时间线记录已删除！/ Timeline record deleted!');
+    } else {
+      alert('无法找到该记录的删除路径 / Cannot find delete path for this record');
+    }
+  } catch (error) {
+    console.error('删除时间线记录失败', error);
+    alert('删除失败 / Delete failed: ' + error.message);
+  }
+}
+
+function closeTimelineModal() {
+  document.getElementById('timelineModal').style.display = 'none';
+}
+
+// ===================== 5. 按施工进度序号排序（默认） =====================
+function sortPiles(key) {
+  if (key === 'stage') {
+    piles.sort((a, b) => {
+      const stageA = Number(a.stage) || 0;
+      const stageB = Number(b.stage) || 0;
+      return stageA - stageB;
+    });
+  } else {
+    piles.sort((a, b) => a[key].localeCompare(b[key]));
+  }
+  render();
+}
+
+// ===================== 原有核心功能 =====================
 function toggleFormElements() {
   const stage = document.getElementById('stage').value;
   const depthContainer = document.getElementById('depthContainer');
@@ -587,18 +1234,6 @@ function clearForm() {
   toggleFormElements();
 }
 
-function sortPiles(key) {
-  piles.sort((a, b) => {
-    if (key === 'stage') {
-      return Number(a.stage) - Number(b.stage);
-    } else {
-      return a[key].localeCompare(b[key]);
-    }
-  });
-  render();
-}
-
-// 【核心修复】增强savePile：确保时间字段格式正确，增加调试日志
 async function savePile() {
   const pileNo = getCombinedPileNo();
   const pileDiameter = document.getElementById('pileDiameter').value.trim();
@@ -607,12 +1242,9 @@ async function savePile() {
   const nowDepth = stage === 4 ? document.getElementById('nowDepth').value.trim() : '';
   const lowerProgress = stage === 7 ? document.getElementById('lowerProgress').value.trim() : '';
   
-  // 【关键修复1】使用Google Sheets兼容的时间格式
-  const now = new Date();
-  // 格式1：ISO字符串（备用）
-  const isoTime = now.toISOString();
-  // 格式2：Google Sheets直接识别的格式（优先使用）
-  const sheetTime = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+  if (!validateStage(pileNo, stage)) {
+    return;
+  }
 
   if (!pileNo) {
     alert('请完整填写桩号！/ Please complete pile no.!');
@@ -641,10 +1273,13 @@ async function savePile() {
   saveBtn.disabled = true;
 
   try {
-    // 1. 先删除原有主数据（保持原有逻辑）
     await fetch(`${SHEETDB_API_URL}/pileNo/${encodeURIComponent(pileNo)}`, { method: 'DELETE' });
 
-    // 2. 保存新的主数据（【关键修复2】同时写入两种时间格式，确保兼容）
+    const now = new Date();
+    const isoTime = now.toISOString();
+    const sheetTime = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+
+    // 保存主数据（包含操作人信息）
     const mainData = {
       pileNo: pileNo,
       pileDiameter: pileDiameter,
@@ -652,13 +1287,13 @@ async function savePile() {
       rig: rig,
       nowDepth: nowDepth,
       lowerProgress: lowerProgress,
-      updateTime: isoTime,          // ISO格式时间
-      updateTimeSheet: sheetTime,   // Sheets兼容格式时间
-      archived: "FALSE"
+      updateTime: isoTime,
+      updateTimeSheet: sheetTime,
+      archived: "FALSE",
+      operator: clientInfo.user, // 记录操作人
+      operatorIP: clientInfo.ip  // 记录操作IP
     };
-    
-    console.log('准备写入主数据：', mainData); // 调试日志
-    
+
     const mainResponse = await fetch(SHEETDB_API_URL, {
       method: 'POST',
       headers: { 
@@ -673,12 +1308,15 @@ async function savePile() {
       throw new Error(`主数据保存失败: HTTP ${mainResponse.status}: ${errorText}`);
     }
 
-    // 3. 自动记录时间线（【关键修复3】传递两种时间格式）
+    // 保存时间线记录（包含操作人信息）
     await saveTimelineRecord(pileNo, stage, pileDiameter, rig, nowDepth, lowerProgress, isoTime, sheetTime);
+
+    await checkTimelineConsistency(pileNo);
 
     await loadTableData();
     clearForm();
-    alert('数据已成功保存！/ Data saved successfully!');
+    await addLog("保存数据 / Save Data", `保存桩号 ${pileNo} 到 ${stage+1} 环节 / Save pile ${pileNo} to stage ${stage+1}`);
+    alert('✅ 数据已成功保存！/ Data saved successfully!');
   } catch (error) {
     console.error('保存失败', error);
     let errorMsg = error.message;
@@ -692,13 +1330,10 @@ async function savePile() {
   }
 }
 
-// 【核心修复】重写saveTimelineRecord函数
 async function saveTimelineRecord(pileNo, stage, pileDiameter, rig, nowDepth, lowerProgress, isoTime, sheetTime) {
-  // 确保时间参数有值
   const recordIsoTime = isoTime || new Date().toISOString();
   const recordSheetTime = sheetTime || new Date().toLocaleString('zh-CN');
   
-  // 【关键修复4】时间线数据同时包含多种时间格式
   const timelineRecord = {
     pileNo: pileNo,
     stage: stage.toString(),
@@ -708,13 +1343,13 @@ async function saveTimelineRecord(pileNo, stage, pileDiameter, rig, nowDepth, lo
     rig: rig || '-',
     nowDepth: nowDepth || '-',
     lowerProgress: lowerProgress || '-',
-    timestamp: recordIsoTime,       // ISO格式
-    time: recordSheetTime,          // Sheets兼容格式
-    createTime: new Date().toString() // 备用格式
+    timestamp: recordIsoTime,
+    time: recordSheetTime,
+    createTime: new Date().toString(),
+    operator: clientInfo.user, // 记录操作人
+    operatorIP: clientInfo.ip  // 记录操作IP
   };
 
-  console.log('准备写入时间线数据：', timelineRecord); // 调试日志
-  
   const response = await fetch(TIMELINE_SHEETDB_URL, {
     method: 'POST',
     headers: { 
@@ -728,12 +1363,8 @@ async function saveTimelineRecord(pileNo, stage, pileDiameter, rig, nowDepth, lo
     const errorText = await response.text();
     throw new Error(`时间线保存失败: HTTP ${response.status}: ${errorText}`);
   }
-  
-  const responseData = await response.json();
-  console.log('时间线写入结果：', responseData); // 调试日志
 }
 
-// 修改loadTableData函数中的过滤条件
 async function loadTableData() {
   const tbody = document.getElementById('tableBody');
   tbody.innerHTML = '<tr><td colspan="8" style="padding:20px;">加载中... / Loading...</td></tr>';
@@ -753,9 +1384,11 @@ async function loadTableData() {
       nowDepth: p.nowDepth || '-',
       lowerProgress: p.lowerProgress || '-',
       archived: p.archived || "FALSE",
-      updateTime: p.updateTime || p.updateTimeSheet || new Date().toISOString() // 兼容两种时间字段
+      updateTime: p.updateTime || p.updateTimeSheet || new Date().toISOString(),
+      operator: p.operator || "未知操作人" // 操作人信息
     })) : [];
-    render();
+    
+    sortPiles('stage');
   } catch (error) {
     console.error('加载数据失败:', error);
     let errorMsg = error.message.includes('Failed to fetch') ? '无法连接到SheetDB（检查网络/API地址）' : error.message;
@@ -763,16 +1396,15 @@ async function loadTableData() {
   }
 }
 
-// 渲染表格（优化按钮排版）
 function render() {
   const tbody = document.getElementById('tableBody');
   const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
   
-  // 筛选搜索结果
   const filteredPiles = piles.filter(pile => {
     return pile.pileNo.toLowerCase().includes(searchTerm) ||
            pile.rig.toLowerCase().includes(searchTerm) ||
-           pile.pileDiameter.toLowerCase().includes(searchTerm);
+           pile.pileDiameter.toLowerCase().includes(searchTerm) ||
+           pile.operator.toLowerCase().includes(searchTerm); // 支持搜索操作人
   });
 
   if (filteredPiles.length === 0) {
@@ -781,7 +1413,6 @@ function render() {
   }
 
   tbody.innerHTML = filteredPiles.map(pile => {
-    // 生成进度点
     const progressDots = Array.from({ length: steps }, (_, i) => {
       let className = 'dot';
       if (i < pile.stage) className += ' done';
@@ -789,7 +1420,6 @@ function render() {
       return `<div class="${className}" title="${i+1}: ${stageCnNames[i]} / ${stageNames[i]}">${i+1}</div>`;
     }).join('');
 
-    // 确定状态标签
     let statusClass, statusTextCn, statusTextEn;
     if (pile.stage < 4) {
       statusClass = 'status-pre-boring';
@@ -847,12 +1477,10 @@ function render() {
   }).join('');
 }
 
-// 编辑桩记录（保持原有逻辑）
 function editPile(pileNo) {
   const pile = piles.find(p => p.pileNo === pileNo);
   if (!pile) return;
 
-  // 拆分桩号
   const [prefix1, prefix2, suffix] = pile.pileNo.split('-');
   if (prefix1 && prefix2 && suffix) {
     document.getElementById('pilePrefix1').value = prefix1;
@@ -867,169 +1495,20 @@ function editPile(pileNo) {
   document.getElementById('lowerProgress').value = pile.lowerProgress || 'Bottom Section Lowering';
   
   toggleFormElements();
-  
-  // 滚动到顶部表单
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-// 新增：删除桩记录功能
-async function deletePile(pileNo) {
-  if (!confirm(`确定要删除桩号 ${pileNo} 的所有数据吗？此操作不可恢复！\nAre you sure to delete all data of pile ${pileNo}? This operation cannot be undone!`)) {
-    return;
-  }
-
-  try {
-    // 删除主数据
-    const mainResponse = await fetch(`${SHEETDB_API_URL}/pileNo/${encodeURIComponent(pileNo)}`, { method: 'DELETE' });
-    if (!mainResponse.ok) throw new Error(`删除主数据失败: HTTP ${mainResponse.status}`);
-
-    // 重新加载数据
-    await loadTableData();
-    alert(`桩 ${pileNo} 已成功删除！\nPile ${pileNo} deleted successfully!`);
-  } catch (error) {
-    console.error('删除失败', error);
-    let errorMsg = error.message;
-    if (errorMsg.includes('Failed to fetch')) errorMsg = '网络错误或SheetDB地址错误';
-    if (errorMsg.includes('403')) errorMsg = '表格权限不足（需设为Anyone可编辑）';
-    if (errorMsg.includes('404')) errorMsg = 'SheetDB API地址错误';
-    alert(`删除失败：${errorMsg}\nDelete failed: ${errorMsg}`);
-  }
-}
-
-// 修复存档功能：解决405错误 + 同步延迟问题
-async function archivePile(pileNo) {
-  if (!confirm(`确定要将 ${pileNo} 存档吗？存档后将不在列表中显示。\nAre you sure to archive ${pileNo}? It will not show in list.`)) {
-    return;
-  }
-
-  // 先从本地缓存获取桩数据，避免SheetDB同步延迟
-  const localPile = piles.find(p => p.pileNo === pileNo);
-  if (!localPile) {
-    alert('未找到该桩数据（本地缓存）/ Pile data not found (local cache)');
-    return;
-  }
-
-  try {
-    // 1. 先删除原记录
-    await fetch(`${SHEETDB_API_URL}/pileNo/${encodeURIComponent(pileNo)}`, { method: 'DELETE' });
-
-    // 2. 直接使用本地缓存的数据保存存档记录（不再远程查询）
-    // 【修复】存档时也保留时间字段
-    await fetch(SHEETDB_API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        data: [{ 
-          ...localPile, 
-          archived: "TRUE", 
-          updateTime: localPile.updateTime || new Date().toISOString(),
-          updateTimeSheet: localPile.updateTimeSheet || new Date().toLocaleString('zh-CN')
-        }]
-      })
-    });
-
-    // 3. 重新加载数据（会自动过滤已存档记录）
-    await loadTableData();
-    alert(`桩 ${pileNo} 已成功存档！\nPile ${pileNo} archived successfully!`);
-  } catch (error) {
-    console.error('存档失败', error);
-    let errorMsg = error.message;
-    if (errorMsg.includes('Failed to fetch')) errorMsg = '网络错误或SheetDB地址错误';
-    if (errorMsg.includes('403')) errorMsg = '表格权限不足（需设为Anyone可编辑）';
-    if (errorMsg.includes('404')) errorMsg = 'SheetDB API地址错误';
-    alert(`存档失败：${errorMsg}\nArchive failed: ${errorMsg}`);
-  }
-}
-
-// 【核心修复】增强时间线展示功能
-async function showTimeline(pileNo) {
-  try {
-    const timestamp = new Date().getTime();
-    const url = `${TIMELINE_SHEETDB_URL}?t=${timestamp}&search=pileNo:${encodeURIComponent(pileNo)}`;
-    const response = await fetch(url, { method: 'GET', cache: 'no-store' });
-    
-    console.log('获取时间线URL：', url); // 调试日志
-    
-    if (!response.ok) {
-      // 特殊处理：404表示无记录，不报错
-      if (response.status === 404) {
-        document.getElementById('timelineContent').innerHTML = '<p>暂无时间线记录 / No timeline records</p>';
-      } else {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-    } else {
-      const timelineData = await response.json();
-      console.log('获取到的时间线数据：', timelineData); // 调试日志
-      
-      if (!Array.isArray(timelineData) || timelineData.length === 0) {
-        document.getElementById('timelineContent').innerHTML = '<p>暂无时间线记录 / No timeline records</p>';
-      } else {
-        // 按时间排序（最新的在前面）
-        timelineData.sort((a, b) => {
-          const timeA = a.timestamp || a.time || a.createTime || 0;
-          const timeB = b.timestamp || b.time || b.createTime || 0;
-          return new Date(timeB) - new Date(timeA);
-        });
-        
-        document.getElementById('timelineContent').innerHTML = timelineData.map(item => {
-          // 【关键修复】优先使用能解析的时间字段
-          const timeStr = item.time || item.timestamp || item.createTime || '未知时间';
-          const formattedTime = formatDateTime(timeStr);
-          
-          return `
-            <div class="timeline-item">
-              <div class="timeline-time">${formattedTime}</div>
-              <div class="timeline-content">
-                <span class="timeline-stage">环节 ${item.stage}：${item.stageCn || '未知环节'} / Stage ${item.stage}: ${item.stageEn || 'Unknown Stage'}</span>
-                <br>桩径 / Diameter: ${item.pileDiameter || '-'}
-                ${item.rig && item.rig !== '-' ? `<br>钻机 / Rig: ${item.rig}` : ''}
-                ${item.nowDepth && item.nowDepth !== '-' ? `<br>深度 / Depth: ${item.nowDepth}m` : ''}
-                ${item.lowerProgress && item.lowerProgress !== '-' ? `<br>下笼进度 / Lower Progress: ${item.lowerProgress}` : ''}
-              </div>
-            </div>
-          `;
-        }).join('');
-      }
-    }
-    
-    document.getElementById('timelinePileNo').textContent = `桩号：${pileNo} 时间线记录 / Pile No.: ${pileNo} Timeline`;
-    document.getElementById('timelineModal').style.display = 'flex';
-  } catch (error) {
-    console.error('显示时间线失败', error);
-    // 更友好的错误提示
-    let errorMsg = error.message;
-    if (errorMsg.includes('Failed to fetch')) errorMsg = '网络错误或时间线SheetDB地址错误';
-    if (errorMsg.includes('403')) errorMsg = '时间线表格权限不足（需设为Anyone可编辑）';
-    if (errorMsg.includes('404')) errorMsg = '时间线SheetDB API地址错误';
-    alert(`获取时间线失败：${errorMsg}\nFailed to load timeline: ${errorMsg}`);
-  }
-}
-
-function closeTimelineModal() {
-  document.getElementById('timelineModal').style.display = 'none';
-}
-
-// 【核心修复】增强时间格式化函数，兼容更多格式
 function formatDateTime(timeStr) {
-  // 验证输入有效性
   if (!timeStr || typeof timeStr !== 'string') {
     return '未知时间 / Unknown Time';
   }
   
-  // 尝试多种解析方式
-  let date = null;
-  
-  // 方式1：直接解析
-  date = new Date(timeStr);
+  let date = new Date(timeStr);
   if (!isNaN(date.getTime())) {
     return formatDateToLocal(date);
   }
   
-  // 方式2：修复常见格式问题
-  let fixedString = timeStr;
-  // 处理 2026-01-04 12:00:00 格式
-  fixedString = fixedString.replace(' ', 'T');
-  // 处理缺少时区的情况
+  let fixedString = timeStr.replace(' ', 'T');
   if (!fixedString.endsWith('Z') && !fixedString.includes('+')) {
     fixedString += 'Z';
   }
@@ -1038,18 +1517,15 @@ function formatDateTime(timeStr) {
     return formatDateToLocal(date);
   }
   
-  // 方式3：处理中文格式 2026/01/04 12:00:00
   fixedString = timeStr.replace(/\//g, '-');
   date = new Date(fixedString);
   if (!isNaN(date.getTime())) {
     return formatDateToLocal(date);
   }
   
-  // 所有方式都失败，返回原始字符串
   return `${timeStr} (格式不支持) / ${timeStr} (Unsupported Format)`;
 }
 
-// 辅助函数：统一格式化日期为本地格式
 function formatDateToLocal(date) {
   try {
     const dateStr = date.toLocaleDateString('zh-CN', {
@@ -1066,6 +1542,48 @@ function formatDateToLocal(date) {
   } catch (e) {
     return date.toString();
   }
+}
+
+async function checkTimelineConsistency(pileNo) {
+  return new Promise(async (resolve) => {
+    try {
+      const response = await fetch(`${TIMELINE_SHEETDB_URL}?search=pileNo:${encodeURIComponent(pileNo)}`, {
+        method: 'GET',
+        cache: 'no-store'
+      });
+      
+      if (response.ok) {
+        const timelineData = await response.json();
+        if (Array.isArray(timelineData) && timelineData.length > 1) {
+          timelineData.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+          
+          let isConsistent = true;
+          let lastStage = -1;
+          timelineData.forEach(item => {
+            const currentStage = Number(item.stage);
+            if (currentStage < lastStage) {
+              isConsistent = false;
+            }
+            lastStage = currentStage;
+          });
+          
+          if (!isConsistent) {
+            await addLog("时间线异常 / Timeline Abnormal", `桩号 ${pileNo} 存在步骤回退记录 / Pile ${pileNo} has stage rollback records`);
+            resolve(false);
+          } else {
+            resolve(true);
+          }
+        } else {
+          resolve(true);
+        }
+      } else {
+        resolve(true);
+      }
+    } catch (e) {
+      console.log('时间线校验失败 / Timeline check failed:', e);
+      resolve(true);
+    }
+  });
 }
 </script>
 </body>
