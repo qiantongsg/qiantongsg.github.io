@@ -1089,7 +1089,7 @@ async function showTimeline(pileNo) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
     } else {
-      const timelineData = await response.json();
+      const timelineData = await response.json()
       
       // 过滤并确保只保留与当前桩号匹配的记录
       const filteredData = Array.isArray(timelineData) 
@@ -1133,7 +1133,13 @@ async function showTimeline(pileNo) {
                 ${item.nowDepth && item.nowDepth !== '-' ? `<br>深度 / Depth: ${item.nowDepth}m` : ''}
                 ${item.lowerProgress && item.lowerProgress !== '-' ? `<br>下笼进度 / Lower Progress: ${item.lowerProgress}` : ''}
                 ${item.operator ? `<br>操作人 / Operator: <span class="log-operator">${item.operator}</span>` : ''}
-                <button onclick="deleteTimelineRecord('${pileNo}', '${recordId}', ${index})" class="timeline-delete-btn">删除此记录 / Delete This Record</button>
+               <button
+                   class="timeline-delete-btn"
+                   onclick="deleteTimelineRecord(${item._rowNumber}, '${item.pileNo}')">
+                   删除此记录
+               </button>
+
+
               </div>
             </div>
           `;
@@ -1153,25 +1159,34 @@ async function showTimeline(pileNo) {
   }
 }
 
-async function deleteTimelineRecord(pileNo, recordId, index) {
-  const confirmDelete = confirm(`
-    ⚠️ 确认删除这条时间线记录吗？
-    此操作不可恢复！
-    \n
-    ⚠️ Confirm delete this timeline record?
-    This operation cannot be undone!
-  `);
-  
+async function deleteTimelineRecord(rowNumber, pileNo) {
+  console.log('🧪 deleteTimelineRecord called with:', rowNumber, pileNo);
+
+  const confirmDelete = confirm('确认删除这条时间线记录吗？');
   if (!confirmDelete) return;
-  
+
+  const deleteUrl = `${TIMELINE_SHEETDB_URL}/${rowNumber}`;
+  console.log('🧪 DELETE URL:', deleteUrl);
+
   try {
-    let deleteUrl = '';
-    // 实现时间线记录删除的逻辑...
-    alert('时间线记录已删除 / Timeline record deleted');
-    showTimeline(pileNo); // 重新加载时间线
+    const res = await fetch(deleteUrl, { method: 'DELETE' });
+
+    console.log('🧪 Response status:', res.status);
+    console.log('🧪 Response ok:', res.ok);
+
+    const text = await res.text();
+    console.log('🧪 Response body:', text);
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+
+    await showTimeline(pileNo);
+    alert('✅ 时间线记录已删除');
+
   } catch (error) {
-    console.error('删除时间线记录失败', error);
-    alert('删除时间线记录失败 / Failed to delete timeline record: ' + error.message);
+    console.error('❌ 删除时间线失败（捕获到异常）:', error);
+    alert('❌ 删除时间线记录失败 / Failed to delete timeline record');
   }
 }
 
@@ -1199,25 +1214,36 @@ function formatDateTime(timeStr) {
 
 // 其他必要的函数实现...
 function toggleFormElements() {
-  // 实现表单元素切换逻辑
   const stage = document.getElementById('stage').value;
   const depthContainer = document.getElementById('depthContainer');
   const lowerProgressContainer = document.getElementById('lowerProgressContainer');
-  
-  // 成孔阶段显示深度输入
-  if (stage === '4') { // Boring阶段
+  const rigContainer = document.getElementById('rigContainer');
+
+  // ✅ 只有 5 Boring 显示钻机
+  if (stage === '4') {
+    rigContainer.classList.remove('hide');
+  } else {
+    rigContainer.classList.add('hide');
+    document.getElementById('rig').value = '';
+  }
+
+  // 原有逻辑：成孔显示深度
+  if (stage === '4') {
     depthContainer.classList.add('show');
   } else {
     depthContainer.classList.remove('show');
+    document.getElementById('nowDepth').value = '';
   }
-  
-  // 钢筋笼下放阶段显示下笼进度
-  if (stage === '7') { // Rebar Cage Lowering阶段
+
+  // 原有逻辑：8 下笼显示下笼进度
+  if (stage === '7') {
     lowerProgressContainer.classList.add('show');
   } else {
     lowerProgressContainer.classList.remove('show');
+    document.getElementById('lowerProgress').value = '';
   }
 }
+
 
 function formatPileSuffix() {
   const suffixInput = document.getElementById('pileSuffix');
@@ -1306,7 +1332,7 @@ function render() {
         <td>${pile.rig || '-'}</td>
         <td><div class="progress-container">${progressDots}</div></td>
         <td>${pile.nowDepth || '-'}</td>
-        <td>${pile.lowerProgress || '-'}</td>
+        <td>${Number(pile.stage) === 7 ? (pile.lowerProgress || '-') : '-'}</td>
         <td><span class="status ${statusClass}">${statusText}</span></td>
         <td>
           <div class="operation-container">
