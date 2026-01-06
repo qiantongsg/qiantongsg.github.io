@@ -1363,7 +1363,6 @@ function editPile(pileNo) {
   const pile = piles.find(p => p.pileNo === pileNo);
   if (!pile) return;
   
-  // 拆分桩号为前缀和后缀
   const parts = pile.pileNo.split('-');
   if (parts.length === 3) {
     document.getElementById('pilePrefix1').value = parts[0];
@@ -1378,19 +1377,41 @@ function editPile(pileNo) {
   document.getElementById('lowerProgress').value = pile.lowerProgress || 'Bottom Section Lowering';
   
   toggleFormElements();
-}
 
-function clearForm() {
-  document.getElementById('pilePrefix1').value = '';
-  document.getElementById('pilePrefix2').value = '';
-  document.getElementById('pileSuffix').value = '';
-  document.getElementById('pileDiameter').value = '';
-  document.getElementById('stage').value = '0';
-  document.getElementById('rig').value = '';
-  document.getElementById('nowDepth').value = '';
-  document.getElementById('lowerProgress').value = 'Bottom Section Lowering';
-  
-  toggleFormElements();
+  // 🧪【临时调试】查看当前滚动宿主（只打印，不改行为）
+  console.log(
+    'scroll host:',
+    'window=', window.pageYOffset,
+    'html=', document.documentElement.scrollTop,
+    'body=', document.body.scrollTop
+  );
+
+  // ✅ 原来的滚动代码
+  const target = document.querySelector('.card');
+  if (target) {
+    try { target.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {}
+
+    const y = target.getBoundingClientRect().top
+            + (window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0)
+            - 10;
+
+    try { window.scrollTo({ top: y, behavior: 'smooth' }); } catch (e) { window.scrollTo(0, y); }
+
+    document.documentElement.scrollTop = y;
+    document.body.scrollTop = y;
+
+    let p = target.parentElement;
+    while (p) {
+      const style = window.getComputedStyle(p);
+      const canScroll = /(auto|scroll)/.test(style.overflowY) && p.scrollHeight > p.clientHeight;
+      if (canScroll) {
+        const py = target.getBoundingClientRect().top - p.getBoundingClientRect().top + p.scrollTop - 10;
+        p.scrollTop = py;
+        break;
+      }
+      p = p.parentElement;
+    }
+  }
 }
 
 async function savePile() {
