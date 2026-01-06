@@ -1491,6 +1491,20 @@ async function savePile() {
       })
     });
     
+function clearForm() {
+  document.getElementById('pilePrefix1').value = '';
+  document.getElementById('pilePrefix2').value = '';
+  document.getElementById('pileSuffix').value = '';
+  document.getElementById('pileDiameter').value = '';
+  document.getElementById('stage').value = '0';
+  document.getElementById('rig').value = '';
+  document.getElementById('nowDepth').value = '';
+  document.getElementById('lowerProgress').value = 'Bottom Section Lowering';
+
+  toggleFormElements();
+}
+
+
     // 刷新数据并重新排序
     await loadTableData();
     // 保存后保持按进度排序
