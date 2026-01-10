@@ -459,7 +459,7 @@ select, input {
         <option value="W22">W22</option>
       </select>
       <span>-</span>
-      <input id="pileSuffix" placeholder="01/02/03... / 01/02/03..." required onblur="formatPileSuffix()">
+      <input id="pileSuffix" placeholder="001/012/123..." required onblur="formatPileSuffix()">
     </div>
   </div>
 
@@ -640,6 +640,9 @@ let piles = [];
 let recyclePiles = [];
 let operationLogs = [];
 let clientInfo = { ip: "未知IP", user: "未知用户", device: "未知设备" }; // 客户端信息
+let recyclePage = 1;              // 当前回收站页码
+const RECYCLE_PAGE_SIZE = 10;     // 每页最多 10 条
+
 const steps = 12;
 const stageNames = [
   "Setting out", "Casing installing", "ECC Inspection",
@@ -987,6 +990,12 @@ async function loadRecycleData() {
     if (response.ok) {
       const data = await response.json();
       recyclePiles = Array.isArray(data) ? data : [];
+      const threeDaysAgo = Date.now() - 3 * 24 * 60 * 60 * 1000;
+      recyclePiles = recyclePiles.filter(item => {
+      const t = new Date(item.operationTime || item.deleteTime).getTime();
+      return !isNaN(t) && t >= threeDaysAgo;
+});
+
       renderRecycleTable();
     }
   } catch (e) {
@@ -997,24 +1006,65 @@ async function loadRecycleData() {
 
 function renderRecycleTable() {
   const tbody = document.getElementById('recycleTableBody');
-  if (recyclePiles.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6">回收站为空 / Recycle is empty</td></tr>';
+
+  // 兜底：无数据
+  if (!Array.isArray(recyclePiles) || recyclePiles.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="6">
+          📌 仅显示最近 3 天的回收记录<br>
+          📌 更早的记录请前往 Google Sheet 数据库查看
+        </td>
+      </tr>
+    `;
     return;
   }
-  
-  tbody.innerHTML = recyclePiles.map(pile => `
+
+  // ===== 分页核心逻辑 =====
+  const start = (recyclePage - 1) * RECYCLE_PAGE_SIZE;
+  const end = start + RECYCLE_PAGE_SIZE;
+  const pageData = recyclePiles.slice(start, end);
+
+  // ===== 渲染当前页数据 =====
+  tbody.innerHTML = pageData.map(pile => `
     <tr>
-      <td>${pile.pileNo}</td>
+      <td>${pile.pileNo || '-'}</td>
       <td>${pile.pileDiameter || '-'}</td>
       <td>${pile.stage || '-'}</td>
-      <td>${pile.operationTime || '-'}</td>
-      <td>${pile.operationType || '-'}</td>
+      <td>${pile.operationTime || pile.deleteTime || '-'}</td>
+      <td>${pile.operationType || pile.deleteType || '-'}</td>
       <td>
-        <button onclick="restorePile('${pile.pileNo}')" class="restore-btn">恢复 / Restore</button>
-        <button class="permanent-delete-btn" onclick="alert('永久删除需通过Google Sheet操作！/ Permanent delete via Google Sheet!')">永久删除 / Delete</button>
+        <button onclick="restorePile('${pile.pileNo}')" class="restore-btn">
+          恢复 / Restore
+        </button>
+        <button
+          class="permanent-delete-btn"
+          onclick="alert('永久删除需通过 Google Sheet 操作！')">
+          永久删除 / Delete
+        </button>
       </td>
     </tr>
   `).join('');
+
+  // ===== 分页信息与按钮 =====
+  const totalPages = Math.ceil(recyclePiles.length / RECYCLE_PAGE_SIZE);
+
+  tbody.innerHTML += `
+    <tr>
+      <td colspan="6">
+        第 ${recyclePage} 页 / 共 ${totalPages} 页
+        &nbsp;&nbsp;
+        <button
+          onclick="recyclePage = Math.max(1, recyclePage - 1); renderRecycleTable();">
+          上一页
+        </button>
+        <button
+          onclick="recyclePage = Math.min(${totalPages}, recyclePage + 1); renderRecycleTable();">
+          下一页
+        </button>
+      </td>
+    </tr>
+  `;
 }
 
 async function restorePile(pileNo) {
@@ -1133,11 +1183,11 @@ async function showTimeline(pileNo) {
                 ${item.nowDepth && item.nowDepth !== '-' ? `<br>深度 / Depth: ${item.nowDepth}m` : ''}
                 ${item.lowerProgress && item.lowerProgress !== '-' ? `<br>下笼进度 / Lower Progress: ${item.lowerProgress}` : ''}
                 ${item.operator ? `<br>操作人 / Operator: <span class="log-operator">${item.operator}</span>` : ''}
-               <button
-                   class="timeline-delete-btn"
-                   onclick="deleteTimelineRecord(${item._rowNumber}, '${item.pileNo}')">
-                   删除此记录
-               </button>
+              <button
+  class="timeline-delete-btn"
+  onclick="deleteTimelineRecord('${item.id}', '${item.pileNo}')">
+  删除此记录
+</button>
 
 
               </div>
@@ -1159,36 +1209,54 @@ async function showTimeline(pileNo) {
   }
 }
 
-async function deleteTimelineRecord(rowNumber, pileNo) {
-  console.log('🧪 deleteTimelineRecord called with:', rowNumber, pileNo);
-
-  const confirmDelete = confirm('确认删除这条时间线记录吗？');
+async function deleteTimelineRecord(timelineId, pileNo) {
+  const confirmDelete = confirm(
+    '⚠️ 确认删除这一条时间线记录吗？\n该操作仅影响当前记录，可追溯。'
+  );
   if (!confirmDelete) return;
-
-  const deleteUrl = `${TIMELINE_SHEETDB_URL}/${rowNumber}`;
-  console.log('🧪 DELETE URL:', deleteUrl);
+if (!timelineId || timelineId === 'undefined') {
+  alert(
+    '⚠️ 该时间线记录为旧数据，缺少唯一ID，\n' +
+    '无法在页面中精准删除。\n\n' +
+    '请前往 Google Sheet 数据库手动处理。'
+  );
+  return;
+}
 
   try {
-    const res = await fetch(deleteUrl, { method: 'DELETE' });
+    // ① 先写入回收站（可追溯）
+    await fetch(RECYCLE_SHEETDB_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        data: [{
+          timelineId,
+          pileNo,
+          deleteTime: formatDateToLocal(new Date()),
+          deleteType: 'Timeline Delete',
+          operator: clientInfo.user,
+          operatorIP: clientInfo.ip
+        }]
+      })
+    });
 
-    console.log('🧪 Response status:', res.status);
-    console.log('🧪 Response ok:', res.ok);
+    // ② 只删除这一条 timeline（按唯一 ID）
+   await fetch(
+  `${TIMELINE_SHEETDB_URL}/id/${encodeURIComponent(timelineId)}`,
+  { method: 'DELETE' }
+);
 
-    const text = await res.text();
-    console.log('🧪 Response body:', text);
 
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
-    }
-
+    // ③ 刷新时间线
     await showTimeline(pileNo);
-    alert('✅ 时间线记录已删除');
 
-  } catch (error) {
-    console.error('❌ 删除时间线失败（捕获到异常）:', error);
-    alert('❌ 删除时间线记录失败 / Failed to delete timeline record');
+    alert('✅ 已删除该条时间线记录');
+  } catch (e) {
+    console.error('删除时间线失败', e);
+    alert('❌ 删除失败，请检查网络或数据库权限');
   }
 }
+
 
 // 辅助函数：格式化日期时间
 function formatDateToLocal(date) {
@@ -1247,10 +1315,18 @@ function toggleFormElements() {
 
 function formatPileSuffix() {
   const suffixInput = document.getElementById('pileSuffix');
-  let value = suffixInput.value.trim();
+
+  // 只保留数字
+  let value = suffixInput.value.replace(/\D/g, '');
+
+  // 最多 3 位
+  value = value.slice(0, 3);
+
   if (value) {
-    // 确保桩号后缀为两位数
-    suffixInput.value = value.padStart(2, '0');
+    // 不足 3 位左侧补零
+    suffixInput.value = value.padStart(3, '0');
+  } else {
+    suffixInput.value = '';
   }
 }
 
@@ -1475,19 +1551,21 @@ async function savePile() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         data: [{
-          pileNo,
-          pileDiameter,
-          stage,
-          stageCn: stageCnNames[Number(stage)],
-          stageEn: stageNames[Number(stage)],
-          rig: rig || '-',
-          nowDepth: nowDepth || '-',
-          lowerProgress: lowerProgress || '-',
-          time: formatDateToLocal(new Date()),
-          timestamp: new Date().toISOString(),
-          operator: clientInfo.user,
-          operatorIP: clientInfo.ip
-        }]
+  id: crypto.randomUUID(),   // ⭐ 唯一时间线ID
+  pileNo,
+  pileDiameter,
+  stage,
+  stageCn: stageCnNames[Number(stage)],
+  stageEn: stageNames[Number(stage)],
+  rig: rig || '-',
+  nowDepth: nowDepth || '-',
+  lowerProgress: lowerProgress || '-',
+  time: formatDateToLocal(new Date()),
+  timestamp: new Date().toISOString(),
+  operator: clientInfo.user,
+  operatorIP: clientInfo.ip
+}]
+
       })
     });
     
